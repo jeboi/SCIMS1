@@ -9,7 +9,7 @@ use Illuminate\Support\Facades\Auth;
 class AuthController extends Controller
 {
     /**
-     * Login user
+     * Login user and issue Sanctum token.
      */
     public function login(Request $request)
     {
@@ -18,46 +18,54 @@ class AuthController extends Controller
             'password' => ['required'],
         ]);
 
-        if (! Auth::attempt($credentials, true)) {
+        if (! Auth::attempt($credentials)) {
             return response()->json([
+                'success' => false,
                 'message' => 'Invalid credentials.',
             ], 401);
         }
 
-        $request->session()->regenerate();
+        $user = Auth::user();
+
+        $token = $user->createToken('scims-api-token')->plainTextToken;
 
         return response()->json([
+            'success' => true,
             'message' => 'Login successful.',
-            'user' => Auth::user(),
+            'user' => $user,
+            'token' => $token,
         ]);
     }
 
     /**
-     * Current authenticated user
+     * Get the currently authenticated user.
      */
     public function user(Request $request)
     {
         return response()->json([
-            'authenticated' => Auth::check(),
-            'user' => Auth::user(),
-            'session_id' => session()->getId(),
+            'success' => true,
+            'authenticated' => true,
+            'user' => $request->user(),
         ]);
     }
 
     /**
-     * Logout user
+     * Logout user by revoking the current Sanctum token.
      */
     public function logout(Request $request)
-    {
-        Auth::guard('web')->logout();
-
-        $request->session()->invalidate();
-        $request->session()->regenerateToken();
-
-        return response()->json([
-            'message' => 'Logged out successfully.',
-            'authenticated' => Auth::check(),
-            'session_id' => session()->getId(),
-        ]);
-    }
+{
+    // Log out the user from the session
+    Auth::guard('web')->logout();
+    
+    // Invalidate the session
+    $request->session()->invalidate();
+    
+    // Regenerate CSRF token
+    $request->session()->regenerateToken();
+    
+    return response()->json([
+        'success' => true,
+        'message' => 'Logged out successfully.',
+    ]);
+}
 }

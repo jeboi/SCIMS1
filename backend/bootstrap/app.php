@@ -13,8 +13,11 @@ return Application::configure(basePath: dirname(__DIR__))
     )
     ->withMiddleware(function (Middleware $middleware) {
         // Enforces Sanctum stateful sessions on API routes
-        $middleware->statefulApi(); 
+        $middleware->statefulApi();
     })
     ->withExceptions(function (Exceptions $exceptions) {
-        //
-    })->create();
+        $exceptions->shouldRenderJsonWhen(function ($request, $input) {
+            return $request->is('api/*') || $request->expectsJson();
+        });
+    })
+    ->create();

@@ -3,10 +3,15 @@ import appConfig from "@/config/app.js";
 
 const axiosInstance = axios.create({
     baseURL: appConfig.apiUrl,
+
     withCredentials: true,
-    withXSRFToken: true, // Replaces manual xsrfCookieName/xsrfHeaderName in modern Axios
+    withXSRFToken: true,
+
+    xsrfCookieName: "XSRF-TOKEN",
+    xsrfHeaderName: "X-XSRF-TOKEN",
+
     headers: {
-        "X-Requested-With": "XMLHttpRequest", // Tells Laravel this is an AJAX request
+        "X-Requested-With": "XMLHttpRequest",
         Accept: "application/json",
         "Content-Type": "application/json",
     },
