@@ -1,5 +1,8 @@
 "use client";
 
+import { PermissionGuard } from "@/components/auth/PermissionGuard";
+import { Can, CanAny } from "@/components/auth/Can";             // ← ADDED
+import { PERMISSIONS } from "@/utils/permissions";
 import { useEffect, useState } from "react";
 import axiosInstance from "@/lib/axios";
 import { toast } from "react-hot-toast";
@@ -11,7 +14,7 @@ import {
     FolderOpen, User, Tag
 } from "lucide-react";
 
-export default function LogisticsDocumentsPage() {
+function LogisticsDocumentsContent() {
     const [documents, setDocuments] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState("");
@@ -23,7 +26,6 @@ export default function LogisticsDocumentsPage() {
     const [filterCategory, setFilterCategory] = useState("all");
     const [actionLoading, setActionLoading] = useState(false);
 
-    // Create form state
     const [form, setForm] = useState({
         title: "",
         category: "",
@@ -63,7 +65,7 @@ export default function LogisticsDocumentsPage() {
 
     const handleCreateDocument = async (e) => {
         e.preventDefault();
-        
+
         if (!form.title.trim()) {
             toast.error("Document title is required.");
             return;
@@ -202,13 +204,18 @@ export default function LogisticsDocumentsPage() {
                     </p>
                 </div>
                 <div className="flex flex-wrap gap-2">
-                    <button
-                        onClick={() => setShowCreateModal(true)}
-                        className="rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-blue-700 flex items-center gap-2"
-                    >
-                        <Plus className="h-4 w-4" />
-                        Add Document
-                    </button>
+                    {/* RBAC: adding documents requires logistics.create */}
+                    <Can permission={PERMISSIONS.LOGISTICS_CREATE}>
+                        <button
+                            onClick={() => setShowCreateModal(true)}
+                            className="rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-blue-700 flex items-center gap-2"
+                        >
+                            <Plus className="h-4 w-4" />
+                            Add Document
+                        </button>
+                    </Can>
+
+                    {/* Refresh — read-only */}
                     <button
                         onClick={loadData}
                         className="rounded-lg border px-4 py-2.5 text-sm font-medium hover:bg-gray-50 flex items-center gap-2"
@@ -308,7 +315,11 @@ export default function LogisticsDocumentsPage() {
                             <th className="px-4 py-3 text-left font-medium">Category</th>
                             <th className="px-4 py-3 text-left font-medium">Date</th>
                             <th className="px-4 py-3 text-center font-medium">Status</th>
-                            <th className="px-4 py-3 text-center font-medium">Actions</th>
+
+                            {/* RBAC: hide Actions column if user can't delete */}
+                            <CanAny permissions={[PERMISSIONS.LOGISTICS_DELETE]}>
+                                <th className="px-4 py-3 text-center font-medium">Actions</th>
+                            </CanAny>
                         </tr>
                     </thead>
                     <tbody className="divide-y">
@@ -340,24 +351,32 @@ export default function LogisticsDocumentsPage() {
                                             </span>
                                         </span>
                                     </td>
-                                    <td className="px-4 py-3 text-center">
-                                        <div className="flex items-center justify-center gap-2">
-                                            <button
-                                                onClick={() => handleViewDocument(doc)}
-                                                className="text-blue-600 hover:text-blue-800"
-                                                title="View"
-                                            >
-                                                <Eye className="h-4 w-4" />
-                                            </button>
-                                            <button
-                                                onClick={() => handleDeleteDocument(doc.document_id)}
-                                                className="text-red-600 hover:text-red-800"
-                                                title="Delete"
-                                            >
-                                                <Trash2 className="h-4 w-4" />
-                                            </button>
-                                        </div>
-                                    </td>
+
+                                    <CanAny permissions={[PERMISSIONS.LOGISTICS_DELETE]}>
+                                        <td className="px-4 py-3 text-center">
+                                            <div className="flex items-center justify-center gap-2">
+                                                {/* View — read-only */}
+                                                <button
+                                                    onClick={() => handleViewDocument(doc)}
+                                                    className="text-blue-600 hover:text-blue-800"
+                                                    title="View"
+                                                >
+                                                    <Eye className="h-4 w-4" />
+                                                </button>
+
+                                                {/* RBAC: delete requires logistics.delete */}
+                                                <Can permission={PERMISSIONS.LOGISTICS_DELETE}>
+                                                    <button
+                                                        onClick={() => handleDeleteDocument(doc.document_id)}
+                                                        className="text-red-600 hover:text-red-800"
+                                                        title="Delete"
+                                                    >
+                                                        <Trash2 className="h-4 w-4" />
+                                                    </button>
+                                                </Can>
+                                            </div>
+                                        </td>
+                                    </CanAny>
                                 </tr>
                             ))
                         )}
@@ -392,7 +411,6 @@ export default function LogisticsDocumentsPage() {
                         </div>
 
                         <div className="p-6 space-y-4">
-                            {/* Document Info */}
                             <div className="grid grid-cols-2 gap-4">
                                 <div>
                                     <p className="text-xs font-medium uppercase text-gray-500">Category</p>
@@ -426,8 +444,8 @@ export default function LogisticsDocumentsPage() {
                                 </div>
                             </div>
 
-                            {/* Actions */}
                             <div className="flex justify-end gap-3 border-t pt-4">
+                                {/* Print — read-only */}
                                 <button
                                     onClick={() => {
                                         const doc = selectedDoc;
@@ -508,32 +526,37 @@ export default function LogisticsDocumentsPage() {
                                     <Printer className="h-4 w-4" />
                                     Print
                                 </button>
-                                <button
-                                    onClick={() => {
-                                        const doc = selectedDoc;
-                                        if (!doc) return;
-                                        const data = {
-                                            document: doc,
-                                            exported_at: new Date().toISOString(),
-                                            exported_by: "SCIMS System",
-                                        };
-                                        const json = JSON.stringify(data, null, 2);
-                                        const blob = new Blob([json], { type: 'application/json' });
-                                        const url = window.URL.createObjectURL(blob);
-                                        const a = document.createElement('a');
-                                        a.href = url;
-                                        a.download = `${doc.document_number || doc.title.replace(/\s+/g, '_')}.json`;
-                                        document.body.appendChild(a);
-                                        a.click();
-                                        document.body.removeChild(a);
-                                        window.URL.revokeObjectURL(url);
-                                        toast.success("Document downloaded successfully!");
-                                    }}
-                                    className="rounded-lg border px-4 py-2 text-sm font-medium hover:bg-gray-50 flex items-center gap-2"
-                                >
-                                    <Download className="h-4 w-4" />
-                                    Download
-                                </button>
+
+                                {/* RBAC: downloading JSON export requires reports.export */}
+                                <Can permission={PERMISSIONS.REPORTS_EXPORT}>
+                                    <button
+                                        onClick={() => {
+                                            const doc = selectedDoc;
+                                            if (!doc) return;
+                                            const data = {
+                                                document: doc,
+                                                exported_at: new Date().toISOString(),
+                                                exported_by: "SCIMS System",
+                                            };
+                                            const json = JSON.stringify(data, null, 2);
+                                            const blob = new Blob([json], { type: 'application/json' });
+                                            const url = window.URL.createObjectURL(blob);
+                                            const a = document.createElement('a');
+                                            a.href = url;
+                                            a.download = `${doc.document_number || doc.title.replace(/\s+/g, '_')}.json`;
+                                            document.body.appendChild(a);
+                                            a.click();
+                                            document.body.removeChild(a);
+                                            window.URL.revokeObjectURL(url);
+                                            toast.success("Document downloaded successfully!");
+                                        }}
+                                        className="rounded-lg border px-4 py-2 text-sm font-medium hover:bg-gray-50 flex items-center gap-2"
+                                    >
+                                        <Download className="h-4 w-4" />
+                                        Download
+                                    </button>
+                                </Can>
+
                                 <button
                                     onClick={() => setShowModal(false)}
                                     className="rounded-lg border px-5 py-2.5 text-sm font-medium hover:bg-gray-50"
@@ -546,7 +569,7 @@ export default function LogisticsDocumentsPage() {
                 </div>
             )}
 
-            {/* Create Document Modal */}
+            {/* Create Document Modal — only reachable via gated button */}
             {showCreateModal && (
                 <div
                     className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 p-4"
@@ -708,5 +731,13 @@ export default function LogisticsDocumentsPage() {
                 </div>
             )}
         </div>
+    );
+}
+
+export default function Page() {
+    return (
+        <PermissionGuard requiredPermission={PERMISSIONS.LOGISTICS_VIEW}>
+            <LogisticsDocumentsContent />
+        </PermissionGuard>
     );
 }

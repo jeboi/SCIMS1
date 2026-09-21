@@ -11,8 +11,11 @@ import {
     Truck, FileText, DollarSign, Printer,
     TrendingUp, Award
 } from "lucide-react";
+import { PermissionGuard } from "@/components/auth/PermissionGuard";
+import { Can, CanAny } from "@/components/auth/Can";             // ← ADDED
+import { PERMISSIONS } from "@/utils/permissions";
 
-export default function PurchaseOrderProcessingPage() {
+function PurchaseOrderProcessingContent() {
     const [purchaseOrders, setPurchaseOrders] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState("");
@@ -54,7 +57,7 @@ export default function PurchaseOrderProcessingPage() {
             processing: "Processing",
             completed: "Completed",
         };
-        
+
         if (!confirm(`Move this PO to "${statusLabels[status]}" status?`)) return;
 
         try {
@@ -173,13 +176,18 @@ export default function PurchaseOrderProcessingPage() {
                     </p>
                 </div>
                 <div className="flex flex-wrap gap-2">
-                    <button
-                        onClick={() => window.location.href = "/purchase-orders/creation"}
-                        className="rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-blue-700 flex items-center gap-2"
-                    >
-                        <Plus className="h-4 w-4" />
-                        Create PO
-                    </button>
+                    {/* RBAC: creating POs requires purchase_orders.create */}
+                    <Can permission={PERMISSIONS.PURCHASE_ORDERS_CREATE}>
+                        <button
+                            onClick={() => window.location.href = "/purchase-orders/creation"}
+                            className="rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-blue-700 flex items-center gap-2"
+                        >
+                            <Plus className="h-4 w-4" />
+                            Create PO
+                        </button>
+                    </Can>
+
+                    {/* Refresh — read-only */}
                     <button
                         onClick={loadData}
                         className="rounded-lg border px-4 py-2.5 text-sm font-medium hover:bg-gray-50 flex items-center gap-2"
@@ -273,7 +281,14 @@ export default function PurchaseOrderProcessingPage() {
                             <th className="px-4 py-3 text-center font-medium">Items</th>
                             <th className="px-4 py-3 text-right font-medium">Total</th>
                             <th className="px-4 py-3 text-center font-medium">Status</th>
-                            <th className="px-4 py-3 text-center font-medium">Actions</th>
+
+                            {/* RBAC: hide Actions column if user can't act on any PO */}
+                            <CanAny permissions={[
+                                PERMISSIONS.PURCHASE_ORDERS_EDIT,
+                                PERMISSIONS.PURCHASE_ORDERS_APPROVE,
+                            ]}>
+                                <th className="px-4 py-3 text-center font-medium">Actions</th>
+                            </CanAny>
                         </tr>
                     </thead>
                     <tbody className="divide-y">
@@ -287,7 +302,7 @@ export default function PurchaseOrderProcessingPage() {
                             filteredPOs.map((po) => {
                                 const total = po.details?.reduce((sum, d) => sum + parseFloat(d.subtotal || 0), 0) || 0;
                                 const nextStatuses = getNextStatuses(po.status);
-                                
+
                                 return (
                                     <tr key={po.po_id} className="hover:bg-gray-50">
                                         <td className="px-4 py-3 font-medium">{po.po_number || `PO #${po.po_id}`}</td>
@@ -308,37 +323,48 @@ export default function PurchaseOrderProcessingPage() {
                                                 </span>
                                             </span>
                                         </td>
-                                        <td className="px-4 py-3 text-center">
-                                            <div className="flex items-center justify-center gap-2">
-                                                <button
-                                                    onClick={() => handleViewPO(po)}
-                                                    className="text-blue-600 hover:text-blue-800"
-                                                    title="View Details"
-                                                >
-                                                    <Eye className="h-4 w-4" />
-                                                </button>
-                                                {nextStatuses.length > 0 && (
-                                                    <select
-                                                        value=""
-                                                        onChange={(e) => {
-                                                            if (e.target.value) {
-                                                                handleUpdateStatus(po.po_id, e.target.value);
-                                                                e.target.value = "";
-                                                            }
-                                                        }}
-                                                        disabled={actionLoading}
-                                                        className="text-xs border rounded px-2 py-1 bg-white"
+
+                                        <CanAny permissions={[
+                                            PERMISSIONS.PURCHASE_ORDERS_EDIT,
+                                            PERMISSIONS.PURCHASE_ORDERS_APPROVE,
+                                        ]}>
+                                            <td className="px-4 py-3 text-center">
+                                                <div className="flex items-center justify-center gap-2">
+                                                    {/* View — read-only */}
+                                                    <button
+                                                        onClick={() => handleViewPO(po)}
+                                                        className="text-blue-600 hover:text-blue-800"
+                                                        title="View Details"
                                                     >
-                                                        <option value="">Action</option>
-                                                        {nextStatuses.map((status) => (
-                                                            <option key={status} value={status}>
-                                                                {getStatusLabel(status)}
-                                                            </option>
-                                                        ))}
-                                                    </select>
-                                                )}
-                                            </div>
-                                        </td>
+                                                        <Eye className="h-4 w-4" />
+                                                    </button>
+
+                                                    {/* RBAC: status changes require purchase_orders.edit */}
+                                                    {nextStatuses.length > 0 && (
+                                                        <Can permission={PERMISSIONS.PURCHASE_ORDERS_EDIT}>
+                                                            <select
+                                                                value=""
+                                                                onChange={(e) => {
+                                                                    if (e.target.value) {
+                                                                        handleUpdateStatus(po.po_id, e.target.value);
+                                                                        e.target.value = "";
+                                                                    }
+                                                                }}
+                                                                disabled={actionLoading}
+                                                                className="text-xs border rounded px-2 py-1 bg-white"
+                                                            >
+                                                                <option value="">Action</option>
+                                                                {nextStatuses.map((status) => (
+                                                                    <option key={status} value={status}>
+                                                                        {getStatusLabel(status)}
+                                                                    </option>
+                                                                ))}
+                                                            </select>
+                                                        </Can>
+                                                    )}
+                                                </div>
+                                            </td>
+                                        </CanAny>
                                     </tr>
                                 );
                             })
@@ -374,7 +400,6 @@ export default function PurchaseOrderProcessingPage() {
                         </div>
 
                         <div className="p-6 space-y-4">
-                            {/* PO Info */}
                             <div className="grid grid-cols-2 gap-4">
                                 <div>
                                     <p className="text-xs font-medium uppercase text-gray-500">Supplier</p>
@@ -396,7 +421,6 @@ export default function PurchaseOrderProcessingPage() {
                                 </div>
                             </div>
 
-                            {/* Items */}
                             <div className="border-t pt-4">
                                 <h3 className="text-sm font-semibold mb-2">PO Items</h3>
                                 <div className="overflow-hidden rounded-lg border">
@@ -441,7 +465,6 @@ export default function PurchaseOrderProcessingPage() {
                                 </div>
                             </div>
 
-                            {/* Status Update Action */}
                             <div className="flex justify-end gap-3 border-t pt-4">
                                 <button
                                     onClick={() => setShowModal(false)}
@@ -449,32 +472,36 @@ export default function PurchaseOrderProcessingPage() {
                                 >
                                     Close
                                 </button>
+
+                                {/* RBAC: status transitions require purchase_orders.edit */}
                                 {getNextStatuses(selectedPO.status).length > 0 && (
-                                    <div className="flex gap-2">
-                                        {getNextStatuses(selectedPO.status).map((status) => (
-                                            <button
-                                                key={status}
-                                                onClick={() => {
-                                                    handleUpdateStatus(selectedPO.po_id, status);
-                                                    if (status === "rejected") setShowModal(false);
-                                                }}
-                                                disabled={actionLoading}
-                                                className={`rounded-lg px-5 py-2.5 text-sm font-medium text-white flex items-center gap-2 ${
-                                                    status === "approved" ? "bg-green-600 hover:bg-green-700" :
-                                                    status === "processing" ? "bg-blue-600 hover:bg-blue-700" :
-                                                    status === "completed" ? "bg-purple-600 hover:bg-purple-700" :
-                                                    status === "rejected" ? "bg-red-600 hover:bg-red-700" :
-                                                    "bg-gray-600 hover:bg-gray-700"
-                                                }`}
-                                            >
-                                                {status === "approved" && <CheckCircle className="h-4 w-4" />}
-                                                {status === "processing" && <Loader2 className="h-4 w-4" />}
-                                                {status === "completed" && <Award className="h-4 w-4" />}
-                                                {status === "rejected" && <XCircle className="h-4 w-4" />}
-                                                {getStatusLabel(status)}
-                                            </button>
-                                        ))}
-                                    </div>
+                                    <Can permission={PERMISSIONS.PURCHASE_ORDERS_EDIT}>
+                                        <div className="flex gap-2">
+                                            {getNextStatuses(selectedPO.status).map((status) => (
+                                                <button
+                                                    key={status}
+                                                    onClick={() => {
+                                                        handleUpdateStatus(selectedPO.po_id, status);
+                                                        if (status === "rejected") setShowModal(false);
+                                                    }}
+                                                    disabled={actionLoading}
+                                                    className={`rounded-lg px-5 py-2.5 text-sm font-medium text-white flex items-center gap-2 ${
+                                                        status === "approved" ? "bg-green-600 hover:bg-green-700" :
+                                                        status === "processing" ? "bg-blue-600 hover:bg-blue-700" :
+                                                        status === "completed" ? "bg-purple-600 hover:bg-purple-700" :
+                                                        status === "rejected" ? "bg-red-600 hover:bg-red-700" :
+                                                        "bg-gray-600 hover:bg-gray-700"
+                                                    }`}
+                                                >
+                                                    {status === "approved" && <CheckCircle className="h-4 w-4" />}
+                                                    {status === "processing" && <Loader2 className="h-4 w-4" />}
+                                                    {status === "completed" && <Award className="h-4 w-4" />}
+                                                    {status === "rejected" && <XCircle className="h-4 w-4" />}
+                                                    {getStatusLabel(status)}
+                                                </button>
+                                            ))}
+                                        </div>
+                                    </Can>
                                 )}
                             </div>
                         </div>
@@ -482,5 +509,13 @@ export default function PurchaseOrderProcessingPage() {
                 </div>
             )}
         </div>
+    );
+}
+
+export default function PurchaseOrderProcessingPage() {
+    return (
+        <PermissionGuard requiredPermission={PERMISSIONS.PURCHASE_ORDERS_VIEW}>
+            <PurchaseOrderProcessingContent />
+        </PermissionGuard>
     );
 }

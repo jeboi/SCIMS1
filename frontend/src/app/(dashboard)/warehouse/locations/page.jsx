@@ -1,14 +1,17 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { 
-    getStorageLocations, 
-    createStorageLocation, 
-    updateStorageLocation, 
+import {
+    getStorageLocations,
+    createStorageLocation,
+    updateStorageLocation,
     deleteStorageLocation,
-    getWarehouses 
+    getWarehouses
 } from "@/services/api";
 import { toast } from "react-hot-toast";
+import { PermissionGuard } from "@/components/auth/PermissionGuard";
+import { Can, CanAny } from "@/components/auth/Can";             // ← ADDED
+import { PERMISSIONS } from "@/utils/permissions";
 
 const initialForm = {
     warehouse_id: "",
@@ -23,7 +26,7 @@ const initialForm = {
     status: "active",
 };
 
-export default function StorageLocationsPage() {
+function StorageLocationsContent() {
     const [locations, setLocations] = useState([]);
     const [warehouses, setWarehouses] = useState([]);
     const [loading, setLoading] = useState(true);
@@ -91,7 +94,7 @@ export default function StorageLocationsPage() {
 
     const handleSubmit = async (e) => {
         e.preventDefault();
-        
+
         if (!form.warehouse_id) {
             toast.error("Please select a warehouse.");
             return;
@@ -113,7 +116,7 @@ export default function StorageLocationsPage() {
             aisle: form.aisle.trim() || null,
             shelf: form.shelf.trim() || null,
             bin: form.bin.trim() || null,
-            rack: form.rack.trim() || null, 
+            rack: form.rack.trim() || null,
             capacity: Number(form.capacity) || 0,
             status: form.status,
         };
@@ -167,12 +170,16 @@ export default function StorageLocationsPage() {
                         Manage storage locations within warehouses.
                     </p>
                 </div>
-                <button
-                    onClick={() => handleOpenModal()}
-                    className="rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-blue-700"
-                >
-                    + Add Location
-                </button>
+
+                {/* RBAC: only warehousing.create can add locations */}
+                <Can permission={PERMISSIONS.WAREHOUSING_CREATE}>
+                    <button
+                        onClick={() => handleOpenModal()}
+                        className="rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-blue-700"
+                    >
+                        + Add Location
+                    </button>
+                </Can>
             </div>
 
             {/* Loading & Error */}
@@ -192,7 +199,14 @@ export default function StorageLocationsPage() {
                                 <th className="px-4 py-3 text-left font-medium">Aisle/Shelf/Bin</th>
                                 <th className="px-4 py-3 text-right font-medium">Capacity</th>
                                 <th className="px-4 py-3 text-left font-medium">Status</th>
-                                <th className="px-4 py-3 text-right font-medium">Actions</th>
+
+                                {/* RBAC: hide entire Actions column if user can't act on any row */}
+                                <CanAny permissions={[
+                                    PERMISSIONS.WAREHOUSING_EDIT,
+                                    PERMISSIONS.WAREHOUSING_DELETE,
+                                ]}>
+                                    <th className="px-4 py-3 text-right font-medium">Actions</th>
+                                </CanAny>
                             </tr>
                         </thead>
                         <tbody className="divide-y">
@@ -215,27 +229,39 @@ export default function StorageLocationsPage() {
                                         <td className="px-4 py-3 text-right">{loc.capacity || 0}</td>
                                         <td className="px-4 py-3">
                                             <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${
-                                                loc.status === "active" 
-                                                    ? "bg-green-100 text-green-800" 
+                                                loc.status === "active"
+                                                    ? "bg-green-100 text-green-800"
                                                     : "bg-gray-100 text-gray-800"
                                             }`}>
                                                 {loc.status}
                                             </span>
                                         </td>
-                                        <td className="px-4 py-3 text-right">
-                                            <button
-                                                onClick={() => handleOpenModal(loc)}
-                                                className="mr-2 text-blue-600 hover:text-blue-800"
-                                            >
-                                                Edit
-                                            </button>
-                                            <button
-                                                onClick={() => handleDelete(loc.location_id)}
-                                                className="text-red-600 hover:text-red-800"
-                                            >
-                                                Delete
-                                            </button>
-                                        </td>
+
+                                        {/* RBAC: hide the cell too, so table stays aligned */}
+                                        <CanAny permissions={[
+                                            PERMISSIONS.WAREHOUSING_EDIT,
+                                            PERMISSIONS.WAREHOUSING_DELETE,
+                                        ]}>
+                                            <td className="px-4 py-3 text-right">
+                                                <Can permission={PERMISSIONS.WAREHOUSING_EDIT}>
+                                                    <button
+                                                        onClick={() => handleOpenModal(loc)}
+                                                        className="mr-2 text-blue-600 hover:text-blue-800"
+                                                    >
+                                                        Edit
+                                                    </button>
+                                                </Can>
+
+                                                <Can permission={PERMISSIONS.WAREHOUSING_DELETE}>
+                                                    <button
+                                                        onClick={() => handleDelete(loc.location_id)}
+                                                        className="text-red-600 hover:text-red-800"
+                                                    >
+                                                        Delete
+                                                    </button>
+                                                </Can>
+                                            </td>
+                                        </CanAny>
                                     </tr>
                                 ))
                             )}
@@ -244,197 +270,205 @@ export default function StorageLocationsPage() {
                 </div>
             )}
 
-{/* Modal */}
-{showModal && (
-    <div
-        className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
-        onMouseDown={(e) => e.target === e.currentTarget && handleCloseModal()}
-    >
-        <div className="w-full max-w-md rounded-xl bg-white shadow-xl max-h-[90vh] flex flex-col">
-            {/* Modal Header */}
-            <div className="flex items-center justify-between border-b px-6 py-4 shrink-0">
-                <h2 className="text-lg font-semibold">
-                    {editingId ? "Edit Storage Location" : "Add Storage Location"}
-                </h2>
-                <button
-                    onClick={handleCloseModal}
-                    disabled={saving}
-                    className="text-xl text-gray-400 hover:text-gray-600"
+            {/* Modal */}
+            {showModal && (
+                <div
+                    className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+                    onMouseDown={(e) => e.target === e.currentTarget && handleCloseModal()}
                 >
-                    ×
-                </button>
-            </div>
+                    <div className="w-full max-w-md rounded-xl bg-white shadow-xl max-h-[90vh] flex flex-col">
+                        {/* Modal Header */}
+                        <div className="flex items-center justify-between border-b px-6 py-4 shrink-0">
+                            <h2 className="text-lg font-semibold">
+                                {editingId ? "Edit Storage Location" : "Add Storage Location"}
+                            </h2>
+                            <button
+                                onClick={handleCloseModal}
+                                disabled={saving}
+                                className="text-xl text-gray-400 hover:text-gray-600"
+                            >
+                                ×
+                            </button>
+                        </div>
 
-            {/* Modal Body - Scrollable */}
-<form 
-    onSubmit={handleSubmit} 
-    className="overflow-y-auto p-6 space-y-4"
-    style={{
-        scrollbarWidth: 'none',        // Firefox
-        msOverflowStyle: 'none',       // IE/Edge
-    }}
->
-                    <div>
-                    <label className="mb-1 block text-sm font-medium text-gray-700">
-                        Warehouse *
-                    </label>
-                    <select
-                        name="warehouse_id"
-                        value={form.warehouse_id}
-                        onChange={handleChange}
-                        className="w-full rounded border px-3 py-2 text-sm"
-                        required
-                    >
-                        <option value="">Select warehouse</option>
-                        {warehouses.map((wh) => (
-                            <option key={wh.warehouse_id} value={wh.warehouse_id}>
-                                {wh.warehouse_name}
-                            </option>
-                        ))}
-                    </select>
-                </div>
+                        {/* Modal Body */}
+                        <form
+                            onSubmit={handleSubmit}
+                            className="overflow-y-auto p-6 space-y-4"
+                            style={{
+                                scrollbarWidth: 'none',
+                                msOverflowStyle: 'none',
+                            }}
+                        >
+                            <div>
+                                <label className="mb-1 block text-sm font-medium text-gray-700">
+                                    Warehouse *
+                                </label>
+                                <select
+                                    name="warehouse_id"
+                                    value={form.warehouse_id}
+                                    onChange={handleChange}
+                                    className="w-full rounded border px-3 py-2 text-sm"
+                                    required
+                                >
+                                    <option value="">Select warehouse</option>
+                                    {warehouses.map((wh) => (
+                                        <option key={wh.warehouse_id} value={wh.warehouse_id}>
+                                            {wh.warehouse_name}
+                                        </option>
+                                    ))}
+                                </select>
+                            </div>
 
-                <div>
-                    <label className="mb-1 block text-sm font-medium text-gray-700">
-                        Location Code *
-                    </label>
-                    <input
-                        type="text"
-                        name="location_code"
-                        value={form.location_code}
-                        onChange={handleChange}
-                        placeholder="e.g. WH1-A1-S2-B3"
-                        className="w-full rounded border px-3 py-2 text-sm"
-                        required
-                    />
-                </div>
+                            <div>
+                                <label className="mb-1 block text-sm font-medium text-gray-700">
+                                    Location Code *
+                                </label>
+                                <input
+                                    type="text"
+                                    name="location_code"
+                                    value={form.location_code}
+                                    onChange={handleChange}
+                                    placeholder="e.g. WH1-A1-S2-B3"
+                                    className="w-full rounded border px-3 py-2 text-sm"
+                                    required
+                                />
+                            </div>
 
-                <div>
-                    <label className="mb-1 block text-sm font-medium text-gray-700">
-                        Location Name *
-                    </label>
-                    <input
-                        type="text"
-                        name="location_name"
-                        value={form.location_name}
-                        onChange={handleChange}
-                        placeholder="e.g. Aisle 1, Shelf 2, Bin 3"
-                        className="w-full rounded border px-3 py-2 text-sm"
-                        required
-                    />
-                </div>
+                            <div>
+                                <label className="mb-1 block text-sm font-medium text-gray-700">
+                                    Location Name *
+                                </label>
+                                <input
+                                    type="text"
+                                    name="location_name"
+                                    value={form.location_name}
+                                    onChange={handleChange}
+                                    placeholder="e.g. Aisle 1, Shelf 2, Bin 3"
+                                    className="w-full rounded border px-3 py-2 text-sm"
+                                    required
+                                />
+                            </div>
 
-                <div className="grid grid-cols-3 gap-2">
-                    <div>
-                        <label className="mb-1 block text-xs font-medium text-gray-700">Zone</label>
-                        <input
-                            type="text"
-                            name="zone"
-                            value={form.zone}
-                            onChange={handleChange}
-                            placeholder="A"
-                            className="w-full rounded border px-2 py-2 text-sm"
-                        />
+                            <div className="grid grid-cols-3 gap-2">
+                                <div>
+                                    <label className="mb-1 block text-xs font-medium text-gray-700">Zone</label>
+                                    <input
+                                        type="text"
+                                        name="zone"
+                                        value={form.zone}
+                                        onChange={handleChange}
+                                        placeholder="A"
+                                        className="w-full rounded border px-2 py-2 text-sm"
+                                    />
+                                </div>
+                                <div>
+                                    <label className="mb-1 block text-xs font-medium text-gray-700">Aisle</label>
+                                    <input
+                                        type="text"
+                                        name="aisle"
+                                        value={form.aisle}
+                                        onChange={handleChange}
+                                        placeholder="1"
+                                        className="w-full rounded border px-2 py-2 text-sm"
+                                    />
+                                </div>
+                                <div>
+                                    <label className="mb-1 block text-xs font-medium text-gray-700">Shelf</label>
+                                    <input
+                                        type="text"
+                                        name="shelf"
+                                        value={form.shelf}
+                                        onChange={handleChange}
+                                        placeholder="2"
+                                        className="w-full rounded border px-2 py-2 text-sm"
+                                    />
+                                </div>
+                            </div>
+
+                            <div>
+                                <label className="mb-1 block text-sm font-medium text-gray-700">Bin (optional)</label>
+                                <input
+                                    type="text"
+                                    name="bin"
+                                    value={form.bin}
+                                    onChange={handleChange}
+                                    placeholder="e.g. B3"
+                                    className="w-full rounded border px-3 py-2 text-sm"
+                                />
+                            </div>
+
+                            <div>
+                                <label className="mb-1 block text-sm font-medium text-gray-700">Rack (optional)</label>
+                                <input
+                                    type="text"
+                                    name="rack"
+                                    value={form.rack}
+                                    onChange={handleChange}
+                                    placeholder="e.g. Rack 3"
+                                    className="w-full rounded border px-3 py-2 text-sm"
+                                />
+                            </div>
+
+                            <div>
+                                <label className="mb-1 block text-sm font-medium text-gray-700">
+                                    Capacity (units)
+                                </label>
+                                <input
+                                    type="number"
+                                    name="capacity"
+                                    min="0"
+                                    value={form.capacity}
+                                    onChange={handleChange}
+                                    className="w-full rounded border px-3 py-2 text-sm"
+                                />
+                            </div>
+
+                            <div>
+                                <label className="mb-1 block text-sm font-medium text-gray-700">
+                                    Status
+                                </label>
+                                <select
+                                    name="status"
+                                    value={form.status}
+                                    onChange={handleChange}
+                                    className="w-full rounded border px-3 py-2 text-sm"
+                                >
+                                    <option value="active">Active</option>
+                                    <option value="inactive">Inactive</option>
+                                </select>
+                            </div>
+
+                            {/* Modal Footer */}
+                            <div className="flex justify-end gap-3 border-t pt-4 mt-2 shrink-0">
+                                <button
+                                    type="button"
+                                    onClick={handleCloseModal}
+                                    disabled={saving}
+                                    className="rounded border px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+                                >
+                                    Cancel
+                                </button>
+                                <button
+                                    type="submit"
+                                    disabled={saving}
+                                    className="rounded bg-blue-600 px-5 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-60"
+                                >
+                                    {saving ? "Saving..." : editingId ? "Update" : "Create"}
+                                </button>
+                            </div>
+                        </form>
                     </div>
-                    <div>
-                        <label className="mb-1 block text-xs font-medium text-gray-700">Aisle</label>
-                        <input
-                            type="text"
-                            name="aisle"
-                            value={form.aisle}
-                            onChange={handleChange}
-                            placeholder="1"
-                            className="w-full rounded border px-2 py-2 text-sm"
-                        />
-                    </div>
-                    <div>
-                        <label className="mb-1 block text-xs font-medium text-gray-700">Shelf</label>
-                        <input
-                            type="text"
-                            name="shelf"
-                            value={form.shelf}
-                            onChange={handleChange}
-                            placeholder="2"
-                            className="w-full rounded border px-2 py-2 text-sm"
-                        />
-                    </div>
                 </div>
-
-                <div>
-                    <label className="mb-1 block text-sm font-medium text-gray-700">Bin (optional)</label>
-                    <input
-                        type="text"
-                        name="bin"
-                        value={form.bin}
-                        onChange={handleChange}
-                        placeholder="e.g. B3"
-                        className="w-full rounded border px-3 py-2 text-sm"
-                    />
-                </div>
-                
-                <div>
-                    <label className="mb-1 block text-sm font-medium text-gray-700">Rack (optional)</label>
-                    <input
-                        type="text"
-                        name="rack"
-                        value={form.rack}
-                        onChange={handleChange}
-                        placeholder="e.g. Rack 3"
-                        className="w-full rounded border px-3 py-2 text-sm"
-                    />
-                </div>
-
-                <div>
-                    <label className="mb-1 block text-sm font-medium text-gray-700">
-                        Capacity (units)
-                    </label>
-                    <input
-                        type="number"
-                        name="capacity"
-                        min="0"
-                        value={form.capacity}
-                        onChange={handleChange}
-                        className="w-full rounded border px-3 py-2 text-sm"
-                    />
-                </div>
-
-                <div>
-                    <label className="mb-1 block text-sm font-medium text-gray-700">
-                        Status
-                    </label>
-                    <select
-                        name="status"
-                        value={form.status}
-                        onChange={handleChange}
-                        className="w-full rounded border px-3 py-2 text-sm"
-                    >
-                        <option value="active">Active</option>
-                        <option value="inactive">Inactive</option>
-                    </select>
-                </div>
-
-                {/* Modal Footer - Fixed at bottom */}
-                <div className="flex justify-end gap-3 border-t pt-4 mt-2 shrink-0">
-                    <button
-                        type="button"
-                        onClick={handleCloseModal}
-                        disabled={saving}
-                        className="rounded border px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
-                    >
-                        Cancel
-                    </button>
-                    <button
-                        type="submit"
-                        disabled={saving}
-                        className="rounded bg-blue-600 px-5 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-60"
-                    >
-                        {saving ? "Saving..." : editingId ? "Update" : "Create"}
-                    </button>
-                </div>
-            </form>
+            )}
         </div>
-    </div>
-)}
-        </div>
+    );
+}
+
+export default function StorageLocationsPage() {
+    return (
+        <PermissionGuard requiredPermission={PERMISSIONS.WAREHOUSING_VIEW}>
+            <StorageLocationsContent />
+        </PermissionGuard>
     );
 }

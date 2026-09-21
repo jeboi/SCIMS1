@@ -10,6 +10,9 @@ import {
     BarChart3, PieChart as PieChartIcon,
     Loader2
 } from "lucide-react";
+import { PermissionGuard } from "@/components/auth/PermissionGuard";
+import { Can } from "@/components/auth/Can";                     // ← ADDED
+import { PERMISSIONS } from "@/utils/permissions";
 
 import {
     BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
@@ -17,7 +20,7 @@ import {
     LineChart, Line
 } from "recharts";
 
-export default function InventoryReportsPage() {
+function InventoryReportsContent() {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState("");
     const [reportData, setReportData] = useState(null);
@@ -34,23 +37,23 @@ export default function InventoryReportsPage() {
         try {
             setLoading(true);
             setError("");
-            
+
             const [itemsRes, transactionsRes, categoriesRes] = await Promise.all([
                 axiosInstance.get("/items"),
                 axiosInstance.get("/inventory-transactions"),
                 axiosInstance.get("/categories"),
             ]);
-            
+
             const itemsData = itemsRes.data?.data || [];
             const transactionsData = transactionsRes.data?.data || [];
             const categoriesData = categoriesRes.data?.data || [];
-            
+
             setItems(itemsData);
             setTransactions(transactionsData);
             setCategories(categoriesData);
-            
+
             generateReport(itemsData, transactionsData, categoriesData);
-            
+
         } catch (err) {
             console.error(err);
             setError("Failed to load report data.");
@@ -61,15 +64,13 @@ export default function InventoryReportsPage() {
     };
 
     const generateReport = (itemsData, transactionsData, categoriesData) => {
-        // 1. Summary Stats
         const totalItems = itemsData.length;
         const totalStock = itemsData.reduce((sum, item) => sum + (item.current_stock || 0), 0);
         const lowStockItems = itemsData.filter(item => item.current_stock <= item.reorder_level).length;
         const outOfStockItems = itemsData.filter(item => item.current_stock <= 0).length;
         const activeItems = itemsData.filter(item => item.status === "active").length;
         const inactiveItems = itemsData.filter(item => item.status === "inactive").length;
-        
-        // 2. Category Breakdown
+
         const categoryBreakdown = categoriesData.map(cat => {
             const catItems = itemsData.filter(item => item.category_id === cat.category_id);
             return {
@@ -78,15 +79,13 @@ export default function InventoryReportsPage() {
                 stock: catItems.reduce((sum, item) => sum + (item.current_stock || 0), 0),
             };
         }).filter(cat => cat.count > 0);
-        
-        // 3. Stock Status Distribution
+
         const statusData = [
             { name: "In Stock", value: itemsData.filter(item => item.current_stock > 0 && item.current_stock > item.reorder_level).length, color: "#22c55e" },
             { name: "Low Stock", value: itemsData.filter(item => item.current_stock > 0 && item.current_stock <= item.reorder_level).length, color: "#f59e0b" },
             { name: "Out of Stock", value: itemsData.filter(item => item.current_stock <= 0).length, color: "#ef4444" },
         ];
-        
-        // 4. Top Items by Stock
+
         const topItemsByStock = [...itemsData]
             .sort((a, b) => (b.current_stock || 0) - (a.current_stock || 0))
             .slice(0, 10)
@@ -95,8 +94,7 @@ export default function InventoryReportsPage() {
                 stock: item.current_stock || 0,
                 reorder: item.reorder_level || 0,
             }));
-        
-        // 5. Monthly Transaction Trend
+
         const monthlyData = {};
         transactionsData.forEach(tx => {
             if (tx.transaction_type === "transfer_out" || tx.transaction_type === "issuing") {
@@ -110,8 +108,7 @@ export default function InventoryReportsPage() {
             month,
             usage: value,
         }));
-        
-        // 6. Summary by Category
+
         const summaryByCategory = categoriesData.map(cat => {
             const catItems = itemsData.filter(item => item.category_id === cat.category_id);
             const totalStock = catItems.reduce((sum, item) => sum + (item.current_stock || 0), 0);
@@ -126,8 +123,7 @@ export default function InventoryReportsPage() {
                 outOfStock: catItems.filter(item => item.current_stock <= 0).length,
             };
         }).filter(cat => cat.items > 0);
-        
-        // 7. Low Stock Items (Priority List)
+
         const lowStockItemsList = itemsData
             .filter(item => item.current_stock <= item.reorder_level && item.status === "active")
             .sort((a, b) => (a.current_stock / a.reorder_level) - (b.current_stock / b.reorder_level))
@@ -139,7 +135,7 @@ export default function InventoryReportsPage() {
                 category: item.category?.category_name || "Uncategorized",
                 status: item.current_stock <= 0 ? "Out of Stock" : "Low Stock",
             }));
-        
+
         setReportData({
             summary: {
                 totalItems,
@@ -162,7 +158,7 @@ export default function InventoryReportsPage() {
 
     const handleExportCSV = () => {
         if (!reportData) return;
-        
+
         const headers = ["Category", "Items", "Total Stock", "Reorder Level", "Healthy", "Low Stock", "Out of Stock"];
         const rows = reportData.summaryByCategory.map(cat => [
             `"${cat.category}"`,
@@ -173,12 +169,12 @@ export default function InventoryReportsPage() {
             cat.lowStock,
             cat.outOfStock,
         ]);
-        
+
         let csv = headers.join(",") + "\n";
         rows.forEach(row => {
             csv += row.join(",") + "\n";
         });
-        
+
         const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
         const url = window.URL.createObjectURL(blob);
         const a = document.createElement('a');
@@ -229,6 +225,7 @@ export default function InventoryReportsPage() {
                     </p>
                 </div>
                 <div className="flex flex-wrap gap-2">
+                    {/* Refresh — read-only */}
                     <button
                         onClick={loadData}
                         className="rounded-lg border px-4 py-2.5 text-sm font-medium hover:bg-gray-50 flex items-center gap-2"
@@ -236,86 +233,89 @@ export default function InventoryReportsPage() {
                         <RefreshCw className="h-4 w-4" />
                         Refresh
                     </button>
+
+                    {/* RBAC: only reports.export can export */}
+                    <Can permission={PERMISSIONS.REPORTS_EXPORT}>
+                        <button
+                            onClick={handleExportCSV}
+                            className="rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-blue-700 flex items-center gap-2"
+                        >
+                            <FileDown className="h-4 w-4" />
+                            Export CSV
+                        </button>
+                    </Can>
+
+                    {/* Print — read-only */}
                     <button
-                        onClick={handleExportCSV}
-                        className="rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-blue-700 flex items-center gap-2"
+                        onClick={() => {
+                            const printWindow = window.open('', '_blank', 'width=1200,height=800');
+                            if (!printWindow) {
+                                toast.error("Please allow popups for this site.");
+                                return;
+                            }
+
+                            const reportContent = document.querySelector('.report-print');
+                            if (!reportContent) {
+                                toast.error("No content found to print.");
+                                return;
+                            }
+
+                            const date = new Date().toLocaleString();
+                            const title = "Inventory Report";
+
+                            printWindow.document.write(`
+                                <!DOCTYPE html>
+                                <html>
+                                    <head>
+                                        <title>Inventory Report</title>
+                                        <style>
+                                            body { font-family: Arial, sans-serif; padding: 40px; }
+                                            .header { text-align: center; margin-bottom: 30px; border-bottom: 2px solid #333; padding-bottom: 20px; }
+                                            .header h1 { font-size: 28px; margin: 0; }
+                                            .header p { color: #666; margin: 5px 0; }
+                                            table { width: 100%; border-collapse: collapse; margin: 20px 0; }
+                                            th, td { border: 1px solid #ddd; padding: 10px; text-align: left; }
+                                            th { background-color: #f3f4f6; font-weight: bold; }
+                                            .summary-cards { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin: 20px 0; }
+                                            .card { border: 1px solid #ddd; padding: 16px; text-align: center; border-radius: 8px; background: #f9fafb; }
+                                            .card-value { font-size: 24px; font-weight: bold; }
+                                            .card-label { font-size: 12px; color: #666; }
+                                            .status-badge { display: inline-block; padding: 2px 12px; border-radius: 12px; font-size: 11px; font-weight: 600; }
+                                            .status-critical { background: #fee2e2; color: #dc2626; }
+                                            .status-warning { background: #fef3c7; color: #d97706; }
+                                            .status-good { background: #d1fae5; color: #059669; }
+                                            .footer { text-align: center; margin-top: 30px; font-size: 12px; color: #666; border-top: 1px solid #ddd; padding-top: 20px; }
+                                            @media print {
+                                                body { padding: 20px; }
+                                                .no-print { display: none; }
+                                            }
+                                        </style>
+                                    </head>
+                                    <body>
+                                        <div class="header">
+                                            <h1>${title}</h1>
+                                            <p>Generated on: ${date}</p>
+                                        </div>
+                                        ${reportContent.innerHTML}
+                                        <div class="footer">
+                                            <p>SCIMS - Supply Chain & Inventory Management System</p>
+                                        </div>
+                                        <script>
+                                            window.onload = function() {
+                                                window.print();
+                                                window.close();
+                                            }
+                                        <\/script>
+                                    </body>
+                                </html>
+                            `);
+                            printWindow.document.close();
+                        }}
+                        className="rounded-lg border px-4 py-2.5 text-sm font-medium hover:bg-gray-50 flex items-center gap-2"
                     >
-                        <FileDown className="h-4 w-4" />
-                        Export CSV
+                        <Printer className="h-4 w-4" />
+                        Print
                     </button>
-                    <button
-    onClick={() => {
-        // Create a new window for printing
-        const printWindow = window.open('', '_blank', 'width=1200,height=800');
-        if (!printWindow) {
-            toast.error("Please allow popups for this site.");
-            return;
-        }
-        
-        // Get the report content
-        const reportContent = document.querySelector('.report-print');
-        if (!reportContent) {
-            toast.error("No content found to print.");
-            return;
-        }
-        
-        // Build the print HTML
-        const date = new Date().toLocaleString();
-        const title = "Inventory Report";
-        
-        printWindow.document.write(`
-            <!DOCTYPE html>
-            <html>
-                <head>
-                    <title>Inventory Report</title>
-                    <style>
-                        body { font-family: Arial, sans-serif; padding: 40px; }
-                        .header { text-align: center; margin-bottom: 30px; border-bottom: 2px solid #333; padding-bottom: 20px; }
-                        .header h1 { font-size: 28px; margin: 0; }
-                        .header p { color: #666; margin: 5px 0; }
-                        table { width: 100%; border-collapse: collapse; margin: 20px 0; }
-                        th, td { border: 1px solid #ddd; padding: 10px; text-align: left; }
-                        th { background-color: #f3f4f6; font-weight: bold; }
-                        .summary-cards { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin: 20px 0; }
-                        .card { border: 1px solid #ddd; padding: 16px; text-align: center; border-radius: 8px; background: #f9fafb; }
-                        .card-value { font-size: 24px; font-weight: bold; }
-                        .card-label { font-size: 12px; color: #666; }
-                        .status-badge { display: inline-block; padding: 2px 12px; border-radius: 12px; font-size: 11px; font-weight: 600; }
-                        .status-critical { background: #fee2e2; color: #dc2626; }
-                        .status-warning { background: #fef3c7; color: #d97706; }
-                        .status-good { background: #d1fae5; color: #059669; }
-                        .footer { text-align: center; margin-top: 30px; font-size: 12px; color: #666; border-top: 1px solid #ddd; padding-top: 20px; }
-                        @media print {
-                            body { padding: 20px; }
-                            .no-print { display: none; }
-                        }
-                    </style>
-                </head>
-                <body>
-                    <div class="header">
-                        <h1>${title}</h1>
-                        <p>Generated on: ${date}</p>
-                    </div>
-                    ${reportContent.innerHTML}
-                    <div class="footer">
-                        <p>SCIMS - Supply Chain & Inventory Management System</p>
-                    </div>
-                    <script>
-                        window.onload = function() {
-                            window.print();
-                            window.close();
-                        }
-                    <\/script>
-                </body>
-            </html>
-        `);
-        printWindow.document.close();
-    }}
-    className="rounded-lg border px-4 py-2.5 text-sm font-medium hover:bg-gray-50 flex items-center gap-2"
->
-    <Printer className="h-4 w-4" />
-    Print
-</button>
                 </div>
             </div>
 
@@ -359,7 +359,6 @@ export default function InventoryReportsPage() {
 
             {/* Charts */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                {/* Stock Status Distribution */}
                 <div className="bg-white rounded-lg border p-4">
                     <h3 className="text-sm font-semibold mb-2">Stock Status Distribution</h3>
                     <div className="h-64">
@@ -385,7 +384,6 @@ export default function InventoryReportsPage() {
                     </div>
                 </div>
 
-                {/* Monthly Usage Trend */}
                 {reportData.monthlyTrend.length > 0 && (
                     <div className="bg-white rounded-lg border p-4">
                         <h3 className="text-sm font-semibold mb-2">Monthly Usage Trend</h3>
@@ -403,7 +401,6 @@ export default function InventoryReportsPage() {
                     </div>
                 )}
 
-                {/* Top Items by Stock */}
                 <div className="bg-white rounded-lg border p-4 lg:col-span-1">
                     <h3 className="text-sm font-semibold mb-2">Top Items by Stock</h3>
                     <div className="h-64">
@@ -420,7 +417,6 @@ export default function InventoryReportsPage() {
                     </div>
                 </div>
 
-                {/* Category Breakdown */}
                 <div className="bg-white rounded-lg border p-4 lg:col-span-1">
                     <h3 className="text-sm font-semibold mb-2">Category Breakdown</h3>
                     <div className="h-64">
@@ -438,7 +434,7 @@ export default function InventoryReportsPage() {
                 </div>
             </div>
 
-            {/* Low Stock Items (Priority List) */}
+            {/* Low Stock Items */}
             {reportData.lowStockItemsList.length > 0 && (
                 <div className="bg-white rounded-lg border p-4">
                     <h3 className="text-sm font-semibold mb-3 flex items-center gap-2">
@@ -466,8 +462,8 @@ export default function InventoryReportsPage() {
                                         <td className="px-4 py-2 text-right">{item.reorder}</td>
                                         <td className="px-4 py-2 text-center">
                                             <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${
-                                                item.status === "Out of Stock" 
-                                                    ? "bg-red-100 text-red-800" 
+                                                item.status === "Out of Stock"
+                                                    ? "bg-red-100 text-red-800"
                                                     : "bg-yellow-100 text-yellow-800"
                                             }`}>
                                                 {item.status}
@@ -481,7 +477,7 @@ export default function InventoryReportsPage() {
                 </div>
             )}
 
-            {/* Category Summary Table */}
+            {/* Category Summary */}
             <div className="bg-white rounded-lg border p-4 report-print">
                 <h3 className="text-sm font-semibold mb-3">Category Summary</h3>
                 <div className="overflow-x-auto">
@@ -520,5 +516,13 @@ export default function InventoryReportsPage() {
                 </div>
             </div>
         </div>
+    );
+}
+
+export default function InventoryReportsPage() {
+    return (
+        <PermissionGuard requiredPermission={PERMISSIONS.REPORTS_VIEW}>
+            <InventoryReportsContent />
+        </PermissionGuard>
     );
 }

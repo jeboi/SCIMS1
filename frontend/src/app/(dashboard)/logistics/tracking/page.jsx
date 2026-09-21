@@ -1,5 +1,8 @@
 "use client";
 
+import { PermissionGuard } from "@/components/auth/PermissionGuard";
+import { Can } from "@/components/auth/Can";                     // ← ADDED
+import { PERMISSIONS } from "@/utils/permissions";
 import { useEffect, useState } from "react";
 import axiosInstance from "@/lib/axios";
 import { toast } from "react-hot-toast";
@@ -12,7 +15,7 @@ import {
     Send, Filter, Warehouse
 } from "lucide-react";
 
-export default function DocumentTrackingPage() {
+function DocumentTrackingContent() {
     const [documents, setDocuments] = useState([]);
     const [trackingRecords, setTrackingRecords] = useState([]);
     const [warehouses, setWarehouses] = useState([]);
@@ -26,12 +29,12 @@ export default function DocumentTrackingPage() {
         location: "",
         remarks: "",
         tracking_number: "",
+        custom_location: "",
     });
     const [actionLoading, setActionLoading] = useState(false);
     const [searchTerm, setSearchTerm] = useState("");
     const [filterStatus, setFilterStatus] = useState("all");
 
-    // Predefined location options
     const LOCATION_OPTIONS = [
         "Main Hotel Warehouse",
         "Franchise Warehouse",
@@ -50,8 +53,7 @@ export default function DocumentTrackingPage() {
         try {
             setLoading(true);
             setError("");
-            
-            // Fetch warehouses for dynamic options
+
             let warehouseData = [];
             try {
                 const warehousesRes = await axiosInstance.get("/warehouses");
@@ -60,19 +62,18 @@ export default function DocumentTrackingPage() {
             } catch (whErr) {
                 console.log("Warehouses not available yet");
             }
-            
-            // Fetch documents with tracking data
+
             const [docsRes, trackingRes] = await Promise.all([
                 axiosInstance.get("/logistics-documents"),
                 axiosInstance.get("/document-tracking").catch(() => ({ data: { data: [] } })),
             ]);
-            
+
             const docs = docsRes.data?.data || [];
             const tracking = trackingRes.data?.data || [];
-            
+
             setDocuments(docs);
             setTrackingRecords(tracking);
-            
+
         } catch (err) {
             console.error(err);
             setError("Failed to load document tracking data.");
@@ -94,36 +95,40 @@ export default function DocumentTrackingPage() {
             location: doc.location || "Main Hotel Warehouse",
             remarks: "",
             tracking_number: doc.document_number || "",
+            custom_location: "",
         });
         setShowStatusModal(true);
     };
 
     const handleUpdateStatus = async (e) => {
         e.preventDefault();
-        
+
+        let finalLocation = statusForm.location;
+        if (statusForm.location === "Other" && statusForm.custom_location?.trim()) {
+            finalLocation = statusForm.custom_location.trim();
+        }
+
         if (!statusForm.status) {
             toast.error("Please select a status.");
             return;
         }
-        if (!statusForm.location) {
-            toast.error("Please select a location.");
+        if (!finalLocation) {
+            toast.error("Please select or enter a location.");
             return;
         }
 
         try {
             setActionLoading(true);
-            
-            // Update document status
+
             await axiosInstance.patch(`/logistics-documents/${selectedDoc.document_id}/status`, {
                 status: statusForm.status,
-                location: statusForm.location,
+                location: finalLocation,
             });
-            
-            // Create tracking record
+
             await axiosInstance.post("/document-tracking", {
                 document_id: selectedDoc.document_id,
                 status: statusForm.status,
-                location: statusForm.location,
+                location: finalLocation,
                 remarks: statusForm.remarks || `Status updated to ${statusForm.status}`,
                 tracking_number: statusForm.tracking_number || selectedDoc.document_number,
             });
@@ -371,6 +376,7 @@ export default function DocumentTrackingPage() {
                                     </td>
                                     <td className="px-4 py-3 text-center">
                                         <div className="flex items-center justify-center gap-2">
+                                            {/* View — read-only */}
                                             <button
                                                 onClick={() => handleViewDocument(doc)}
                                                 className="text-blue-600 hover:text-blue-800"
@@ -378,13 +384,17 @@ export default function DocumentTrackingPage() {
                                             >
                                                 <Eye className="h-4 w-4" />
                                             </button>
-                                            <button
-                                                onClick={() => handleOpenStatusModal(doc)}
-                                                className="text-green-600 hover:text-green-800"
-                                                title="Update Status"
-                                            >
-                                                <Edit className="h-4 w-4" />
-                                            </button>
+
+                                            {/* RBAC: updating tracking status requires logistics.edit */}
+                                            <Can permission={PERMISSIONS.LOGISTICS_EDIT}>
+                                                <button
+                                                    onClick={() => handleOpenStatusModal(doc)}
+                                                    className="text-green-600 hover:text-green-800"
+                                                    title="Update Status"
+                                                >
+                                                    <Edit className="h-4 w-4" />
+                                                </button>
+                                            </Can>
                                         </div>
                                     </td>
                                 </tr>
@@ -421,7 +431,6 @@ export default function DocumentTrackingPage() {
                         </div>
 
                         <div className="p-6 space-y-4">
-                            {/* Document Info */}
                             <div className="grid grid-cols-2 gap-4">
                                 <div>
                                     <p className="text-xs font-medium uppercase text-gray-500">Category</p>
@@ -477,16 +486,19 @@ export default function DocumentTrackingPage() {
                             </div>
 
                             <div className="flex justify-end gap-3 border-t pt-4">
-                                <button
-                                    onClick={() => {
-                                        setShowModal(false);
-                                        handleOpenStatusModal(selectedDoc);
-                                    }}
-                                    className="rounded-lg bg-green-600 px-5 py-2.5 text-sm font-medium text-white hover:bg-green-700 flex items-center gap-2"
-                                >
-                                    <Edit className="h-4 w-4" />
-                                    Update Status
-                                </button>
+                                {/* RBAC: update status requires logistics.edit */}
+                                <Can permission={PERMISSIONS.LOGISTICS_EDIT}>
+                                    <button
+                                        onClick={() => {
+                                            setShowModal(false);
+                                            handleOpenStatusModal(selectedDoc);
+                                        }}
+                                        className="rounded-lg bg-green-600 px-5 py-2.5 text-sm font-medium text-white hover:bg-green-700 flex items-center gap-2"
+                                    >
+                                        <Edit className="h-4 w-4" />
+                                        Update Status
+                                    </button>
+                                </Can>
                                 <button
                                     onClick={() => setShowModal(false)}
                                     className="rounded-lg border px-5 py-2.5 text-sm font-medium hover:bg-gray-50"
@@ -500,152 +512,153 @@ export default function DocumentTrackingPage() {
             )}
 
             {/* Update Status Modal */}
-{showStatusModal && selectedDoc && (
-    <div
-        className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 p-4"
-        onClick={() => setShowStatusModal(false)}
-    >
-        <div
-            className="w-full max-w-md rounded-xl bg-white shadow-2xl"
-            onClick={(e) => e.stopPropagation()}
-        >
-            <div className="flex items-center justify-between border-b px-6 py-4">
-                <div>
-                    <h2 className="text-lg font-semibold">Update Tracking Status</h2>
-                    <p className="text-sm text-gray-500">{selectedDoc.title}</p>
-                </div>
-                <button
+            {showStatusModal && selectedDoc && (
+                <div
+                    className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 p-4"
                     onClick={() => setShowStatusModal(false)}
-                    className="text-2xl text-gray-400 hover:text-gray-600"
                 >
-                    ×
-                </button>
-            </div>
-
-            <form onSubmit={handleUpdateStatus} className="p-6 space-y-4">
-                {/* Status */}
-                <div>
-                    <label className="mb-1 block text-sm font-medium text-gray-700">
-                        Status *
-                    </label>
-                    <select
-                        value={statusForm.status}
-                        onChange={(e) => setStatusForm({ ...statusForm, status: e.target.value })}
-                        className="w-full rounded-lg border px-3 py-2 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
-                        required
+                    <div
+                        className="w-full max-w-md rounded-xl bg-white shadow-2xl"
+                        onClick={(e) => e.stopPropagation()}
                     >
-                        <option value="draft">Draft</option>
-                        <option value="submitted">Submitted</option>
-                        <option value="in_transit">In Transit</option>
-                        <option value="received">Received</option>
-                        <option value="approved">Approved</option>
-                        <option value="rejected">Rejected</option>
-                        <option value="completed">Completed</option>
-                    </select>
-                </div>
+                        <div className="flex items-center justify-between border-b px-6 py-4">
+                            <div>
+                                <h2 className="text-lg font-semibold">Update Tracking Status</h2>
+                                <p className="text-sm text-gray-500">{selectedDoc.title}</p>
+                            </div>
+                            <button
+                                onClick={() => setShowStatusModal(false)}
+                                className="text-2xl text-gray-400 hover:text-gray-600"
+                            >
+                                ×
+                            </button>
+                        </div>
 
-                {/* Location - Dropdown */}
-                <div>
-                    <label className="mb-1 block text-sm font-medium text-gray-700">
-                        Location *
-                    </label>
-                    <select
-                        value={statusForm.location}
-                        onChange={(e) => setStatusForm({ ...statusForm, location: e.target.value })}
-                        className="w-full rounded-lg border px-3 py-2 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
-                        required
-                    >
-                        <option value="">Select location</option>
-                        
-                        {/* Warehouses from database */}
-                        {warehouses.length > 0 && (
-                            <optgroup label="Warehouses">
-                                {warehouses.map((wh) => (
-                                    <option key={wh.warehouse_id} value={wh.warehouse_name}>
-                                        {wh.warehouse_name}
-                                    </option>
-                                ))}
-                            </optgroup>
-                        )}
-                        
-                        {/* Predefined logistics locations */}
-                        <optgroup label="Logistics Locations">
-                            <option value="Supplier Facility">Supplier Facility</option>
-                            <option value="Customs Office">Customs Office</option>
-                            <option value="Port of Entry">Port of Entry</option>
-                            <option value="In Transit">In Transit</option>
-                        </optgroup>
-                        
-                        {/* Other option */}
-                        <option value="Other">Other (Custom)</option>
-                    </select>
-                    {statusForm.location === "Other" && (
-                        <input
-                            type="text"
-                            placeholder="Enter custom location..."
-                            value={statusForm.custom_location || ""}
-                            onChange={(e) => setStatusForm({ ...statusForm, custom_location: e.target.value })}
-                            className="mt-2 w-full rounded-lg border px-3 py-2 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
-                        />
-                    )}
-                    <p className="mt-1 text-xs text-gray-400">
-                        Select from warehouses, logistics locations, or choose "Other" for custom entry.
-                    </p>
-                </div>
+                        <form onSubmit={handleUpdateStatus} className="p-6 space-y-4">
+                            <div>
+                                <label className="mb-1 block text-sm font-medium text-gray-700">
+                                    Status *
+                                </label>
+                                <select
+                                    value={statusForm.status}
+                                    onChange={(e) => setStatusForm({ ...statusForm, status: e.target.value })}
+                                    className="w-full rounded-lg border px-3 py-2 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
+                                    required
+                                >
+                                    <option value="draft">Draft</option>
+                                    <option value="submitted">Submitted</option>
+                                    <option value="in_transit">In Transit</option>
+                                    <option value="received">Received</option>
+                                    <option value="approved">Approved</option>
+                                    <option value="rejected">Rejected</option>
+                                    <option value="completed">Completed</option>
+                                </select>
+                            </div>
 
-                {/* Remarks */}
-                <div>
-                    <label className="mb-1 block text-sm font-medium text-gray-700">
-                        Remarks
-                    </label>
-                    <textarea
-                        value={statusForm.remarks}
-                        onChange={(e) => setStatusForm({ ...statusForm, remarks: e.target.value })}
-                        rows="2"
-                        placeholder="Additional remarks about the status update..."
-                        className="w-full rounded-lg border px-3 py-2 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
-                    />
-                </div>
+                            <div>
+                                <label className="mb-1 block text-sm font-medium text-gray-700">
+                                    Location *
+                                </label>
+                                <select
+                                    value={statusForm.location}
+                                    onChange={(e) => setStatusForm({ ...statusForm, location: e.target.value })}
+                                    className="w-full rounded-lg border px-3 py-2 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
+                                    required
+                                >
+                                    <option value="">Select location</option>
 
-                {/* Tracking Number */}
-                <div>
-                    <label className="mb-1 block text-sm font-medium text-gray-700">
-                        Tracking Number
-                    </label>
-                    <input
-                        type="text"
-                        value={statusForm.tracking_number}
-                        onChange={(e) => setStatusForm({ ...statusForm, tracking_number: e.target.value })}
-                        placeholder="e.g. TRK-2026-001"
-                        className="w-full rounded-lg border px-3 py-2 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
-                    />
-                </div>
+                                    {warehouses.length > 0 && (
+                                        <optgroup label="Warehouses">
+                                            {warehouses.map((wh) => (
+                                                <option key={wh.warehouse_id} value={wh.warehouse_name}>
+                                                    {wh.warehouse_name}
+                                                </option>
+                                            ))}
+                                        </optgroup>
+                                    )}
 
-                <div className="flex justify-end gap-3 border-t pt-4">
-                    <button
-                        type="button"
-                        onClick={() => setShowStatusModal(false)}
-                        className="rounded-lg border px-5 py-2.5 text-sm font-medium hover:bg-gray-50"
-                    >
-                        Cancel
-                    </button>
-                    <button
-                        type="submit"
-                        disabled={actionLoading}
-                        className="rounded-lg bg-green-600 px-5 py-2.5 text-sm font-medium text-white hover:bg-green-700 disabled:opacity-50 flex items-center gap-2"
-                    >
-                        {actionLoading ? (
-                            <Loader2 className="h-4 w-4 animate-spin" />
-                        ) : (
-                            <Check className="h-4 w-4" />
-                        )}
-                        {actionLoading ? "Updating..." : "Update Status"}
-                    </button>
+                                    <optgroup label="Logistics Locations">
+                                        <option value="Supplier Facility">Supplier Facility</option>
+                                        <option value="Customs Office">Customs Office</option>
+                                        <option value="Port of Entry">Port of Entry</option>
+                                        <option value="In Transit">In Transit</option>
+                                    </optgroup>
+
+                                    <option value="Other">Other (Custom)</option>
+                                </select>
+                                {statusForm.location === "Other" && (
+                                    <input
+                                        type="text"
+                                        placeholder="Enter custom location..."
+                                        value={statusForm.custom_location || ""}
+                                        onChange={(e) => setStatusForm({ ...statusForm, custom_location: e.target.value })}
+                                        className="mt-2 w-full rounded-lg border px-3 py-2 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
+                                    />
+                                )}
+                                <p className="mt-1 text-xs text-gray-400">
+                                    Select from warehouses, logistics locations, or choose "Other" for custom entry.
+                                </p>
+                            </div>
+
+                            <div>
+                                <label className="mb-1 block text-sm font-medium text-gray-700">
+                                    Remarks
+                                </label>
+                                <textarea
+                                    value={statusForm.remarks}
+                                    onChange={(e) => setStatusForm({ ...statusForm, remarks: e.target.value })}
+                                    rows="2"
+                                    placeholder="Additional remarks about the status update..."
+                                    className="w-full rounded-lg border px-3 py-2 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
+                                />
+                            </div>
+
+                            <div>
+                                <label className="mb-1 block text-sm font-medium text-gray-700">
+                                    Tracking Number
+                                </label>
+                                <input
+                                    type="text"
+                                    value={statusForm.tracking_number}
+                                    onChange={(e) => setStatusForm({ ...statusForm, tracking_number: e.target.value })}
+                                    placeholder="e.g. TRK-2026-001"
+                                    className="w-full rounded-lg border px-3 py-2 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
+                                />
+                            </div>
+
+                            <div className="flex justify-end gap-3 border-t pt-4">
+                                <button
+                                    type="button"
+                                    onClick={() => setShowStatusModal(false)}
+                                    className="rounded-lg border px-5 py-2.5 text-sm font-medium hover:bg-gray-50"
+                                >
+                                    Cancel
+                                </button>
+                                <button
+                                    type="submit"
+                                    disabled={actionLoading}
+                                    className="rounded-lg bg-green-600 px-5 py-2.5 text-sm font-medium text-white hover:bg-green-700 disabled:opacity-50 flex items-center gap-2"
+                                >
+                                    {actionLoading ? (
+                                        <Loader2 className="h-4 w-4 animate-spin" />
+                                    ) : (
+                                        <Check className="h-4 w-4" />
+                                    )}
+                                    {actionLoading ? "Updating..." : "Update Status"}
+                                </button>
+                            </div>
+                        </form>
+                    </div>
                 </div>
-            </form>
+            )}
         </div>
-    </div>
-)}
-        </div>
+    );
+}
+
+export default function Page() {
+    return (
+        <PermissionGuard requiredPermission={PERMISSIONS.LOGISTICS_VIEW}>
+            <DocumentTrackingContent />
+        </PermissionGuard>
     );
 }

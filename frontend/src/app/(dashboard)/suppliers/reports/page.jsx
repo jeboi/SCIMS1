@@ -11,13 +11,16 @@ import {
     Truck, Calendar, FileText, Download, Printer,
     DollarSign, LineChart as LineChartIcon
 } from "lucide-react";
+import { PermissionGuard } from "@/components/auth/PermissionGuard";
+import { Can } from "@/components/auth/Can";                     // ← ADDED
+import { PERMISSIONS } from "@/utils/permissions";
 
 import {
     BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
     LineChart, Line, PieChart as RePieChart, Pie, Cell
 } from "recharts";
 
-export default function SupplierReportsPage() {
+function SupplierReportsContent() {
     const [suppliers, setSuppliers] = useState([]);
     const [purchaseOrders, setPurchaseOrders] = useState([]);
     const [loading, setLoading] = useState(true);
@@ -33,15 +36,15 @@ export default function SupplierReportsPage() {
         try {
             setLoading(true);
             setError("");
-            
+
             const [suppliersRes, posRes] = await Promise.all([
                 axiosInstance.get("/suppliers"),
                 axiosInstance.get("/purchase-orders"),
             ]);
-            
+
             setSuppliers(suppliersRes.data?.data || []);
             setPurchaseOrders(posRes.data?.data || []);
-            
+
         } catch (err) {
             console.error(err);
             setError("Failed to load supplier data.");
@@ -66,7 +69,7 @@ export default function SupplierReportsPage() {
         const numericRating = typeof rating === 'string' ? parseFloat(rating) : (rating || 0);
         const fullStars = Math.floor(numericRating);
         const emptyStars = 5 - fullStars;
-        
+
         return (
             <span className="flex items-center gap-0.5">
                 {[...Array(Math.max(0, fullStars))].map((_, i) => (
@@ -89,7 +92,6 @@ export default function SupplierReportsPage() {
         })
         .sort((a, b) => parseFloat(b.rating || 0) - parseFloat(a.rating || 0));
 
-    // Stats
     const totalSuppliers = suppliers.length;
     const activeSuppliers = suppliers.filter(s => s.status === "active").length;
     const inactiveSuppliers = suppliers.filter(s => s.status === "inactive").length;
@@ -102,7 +104,6 @@ export default function SupplierReportsPage() {
     const completedPOs = purchaseOrders.filter(p => p.status === "completed").length;
     const pendingPOs = purchaseOrders.filter(p => p.status === "pending").length;
 
-    // Chart Data
     const statusChartData = [
         { name: "Active", value: activeSuppliers, color: "#22c55e" },
         { name: "Inactive", value: inactiveSuppliers, color: "#ef4444" },
@@ -174,6 +175,7 @@ export default function SupplierReportsPage() {
                     </p>
                 </div>
                 <div className="flex flex-wrap gap-2">
+                    {/* Refresh — read-only */}
                     <button
                         onClick={loadData}
                         className="rounded-lg border px-4 py-2.5 text-sm font-medium hover:bg-gray-50 flex items-center gap-2"
@@ -181,35 +183,41 @@ export default function SupplierReportsPage() {
                         <RefreshCw className="h-4 w-4" />
                         Refresh
                     </button>
-                    <button
-                        onClick={() => {
-                            const headers = ["Supplier", "POs", "Rating", "Status"];
-                            const rows = suppliers.map(s => [
-                                `"${s.supplier_name}"`,
-                                getSupplierStats(s.supplier_id).total,
-                                parseFloat(s.rating || 0),
-                                s.status,
-                            ]);
-                            let csv = headers.join(",") + "\n";
-                            rows.forEach(row => {
-                                csv += row.join(",") + "\n";
-                            });
-                            const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-                            const url = window.URL.createObjectURL(blob);
-                            const a = document.createElement('a');
-                            a.href = url;
-                            a.download = `supplier_report_${new Date().toISOString().slice(0,10)}.csv`;
-                            document.body.appendChild(a);
-                            a.click();
-                            document.body.removeChild(a);
-                            window.URL.revokeObjectURL(url);
-                            toast.success("CSV exported successfully!");
-                        }}
-                        className="rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-blue-700 flex items-center gap-2"
-                    >
-                        <Download className="h-4 w-4" />
-                        Export CSV
-                    </button>
+
+                    {/* RBAC: only reports.export can export */}
+                    <Can permission={PERMISSIONS.REPORTS_EXPORT}>
+                        <button
+                            onClick={() => {
+                                const headers = ["Supplier", "POs", "Rating", "Status"];
+                                const rows = suppliers.map(s => [
+                                    `"${s.supplier_name}"`,
+                                    getSupplierStats(s.supplier_id).total,
+                                    parseFloat(s.rating || 0),
+                                    s.status,
+                                ]);
+                                let csv = headers.join(",") + "\n";
+                                rows.forEach(row => {
+                                    csv += row.join(",") + "\n";
+                                });
+                                const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+                                const url = window.URL.createObjectURL(blob);
+                                const a = document.createElement('a');
+                                a.href = url;
+                                a.download = `supplier_report_${new Date().toISOString().slice(0,10)}.csv`;
+                                document.body.appendChild(a);
+                                a.click();
+                                document.body.removeChild(a);
+                                window.URL.revokeObjectURL(url);
+                                toast.success("CSV exported successfully!");
+                            }}
+                            className="rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-blue-700 flex items-center gap-2"
+                        >
+                            <Download className="h-4 w-4" />
+                            Export CSV
+                        </button>
+                    </Can>
+
+                    {/* Print — read-only */}
                     <button
                         onClick={() => {
                             const printWindow = window.open('', '_blank', 'width=1200,height=800');
@@ -305,7 +313,6 @@ export default function SupplierReportsPage() {
 
             {/* Charts */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 report-print">
-                {/* Supplier Status */}
                 {statusChartData.length > 0 && (
                     <div className="bg-white rounded-lg border p-4">
                         <h3 className="text-sm font-semibold mb-2">Supplier Status</h3>
@@ -333,7 +340,6 @@ export default function SupplierReportsPage() {
                     </div>
                 )}
 
-                {/* Rating Distribution */}
                 {ratingDistribution.length > 0 && (
                     <div className="bg-white rounded-lg border p-4">
                         <h3 className="text-sm font-semibold mb-2">Rating Distribution</h3>
@@ -351,7 +357,6 @@ export default function SupplierReportsPage() {
                     </div>
                 )}
 
-                {/* PO Status Distribution */}
                 {poStatusData.length > 0 && (
                     <div className="bg-white rounded-lg border p-4">
                         <h3 className="text-sm font-semibold mb-2">PO Status Distribution</h3>
@@ -379,7 +384,6 @@ export default function SupplierReportsPage() {
                     </div>
                 )}
 
-                {/* Supplier PO Distribution */}
                 {supplierPOData.length > 0 && (
                     <div className="bg-white rounded-lg border p-4">
                         <h3 className="text-sm font-semibold mb-2">Supplier PO Distribution</h3>
@@ -426,8 +430,8 @@ export default function SupplierReportsPage() {
                                         </td>
                                         <td className="px-4 py-2 text-center">
                                             <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${
-                                                supplier.status === "active" 
-                                                    ? "bg-green-100 text-green-800" 
+                                                supplier.status === "active"
+                                                    ? "bg-green-100 text-green-800"
                                                     : "bg-gray-100 text-gray-800"
                                             }`}>
                                                 {supplier.status}
@@ -441,5 +445,13 @@ export default function SupplierReportsPage() {
                 </div>
             )}
         </div>
+    );
+}
+
+export default function SupplierReportsPage() {
+    return (
+        <PermissionGuard requiredPermission={PERMISSIONS.REPORTS_VIEW}>
+            <SupplierReportsContent />
+        </PermissionGuard>
     );
 }

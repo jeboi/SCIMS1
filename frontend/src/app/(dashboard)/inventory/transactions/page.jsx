@@ -3,18 +3,20 @@
 import { useEffect, useState } from "react";
 import axiosInstance from "@/lib/axios";
 import { toast } from "react-hot-toast";
-import { getItems } from "@/services/api"; // we'll add this later
-import { getWarehouses } from "@/services/api"; // we'll add this later
+import { getItems } from "@/services/api";
+import { getWarehouses } from "@/services/api";
 import { useAuth } from "@/context/AuthContext";
+import { PermissionGuard } from "@/components/auth/PermissionGuard";
+import { Can } from "@/components/auth/Can";                     // ← ADDED
+import { PERMISSIONS } from "@/utils/permissions";
 
-export default function TransactionsPage() {
+function TransactionsContent() {
     const [transactions, setTransactions] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState("");
 
     const { user } = useAuth();
 
-    // Filters
     const [filters, setFilters] = useState({
         transaction_type: "",
         warehouse_id: "",
@@ -23,7 +25,6 @@ export default function TransactionsPage() {
         to_date: "",
     });
 
-    // Modal state
     const [showModal, setShowModal] = useState(false);
     const [saving, setSaving] = useState(false);
     const [form, setForm] = useState({
@@ -35,12 +36,10 @@ export default function TransactionsPage() {
         transaction_date: new Date().toISOString().slice(0, 16),
     });
 
-    // Fetch transactions
     const fetchTransactions = async () => {
         try {
             setLoading(true);
             setError("");
-            // Remove empty filters
             const params = Object.fromEntries(
                 Object.entries(filters).filter(([_, v]) => v !== "")
             );
@@ -94,9 +93,9 @@ export default function TransactionsPage() {
         }
 
         if (!user) {
-    toast.error("You must be logged in.");
-    return;
-}
+            toast.error("You must be logged in.");
+            return;
+        }
 
         try {
             setSaving(true);
@@ -121,8 +120,6 @@ export default function TransactionsPage() {
         }
     };
 
-    // Fetch items and warehouses for dropdowns (you can add these services)
-    // For now we'll use direct axios calls
     const [items, setItems] = useState([]);
     const [warehouses, setWarehouses] = useState([]);
 
@@ -165,12 +162,16 @@ export default function TransactionsPage() {
                         View and manage inventory movements.
                     </p>
                 </div>
-                <button
-                    onClick={handleOpenModal}
-                    className="rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-blue-700"
-                >
-                    + New Transaction
-                </button>
+
+                {/* RBAC: creating a transaction writes stock movements → inventory.adjust */}
+                <Can permission={PERMISSIONS.INVENTORY_ADJUST}>
+                    <button
+                        onClick={handleOpenModal}
+                        className="rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-blue-700"
+                    >
+                        + New Transaction
+                    </button>
+                </Can>
             </div>
 
             {/* Filters */}
@@ -397,5 +398,13 @@ export default function TransactionsPage() {
                 </div>
             )}
         </div>
+    );
+}
+
+export default function TransactionsPage() {
+    return (
+        <PermissionGuard requiredPermission={PERMISSIONS.INVENTORY_VIEW}>
+            <TransactionsContent />
+        </PermissionGuard>
     );
 }

@@ -1,5 +1,7 @@
 "use client";
 
+import { PermissionGuard } from "@/components/auth/PermissionGuard";
+import { PERMISSIONS } from "@/utils/permissions";
 import { useState, useEffect } from "react";
 import { RefreshCw, BarChart3 } from "lucide-react";
 import { toast } from "react-hot-toast";
@@ -14,7 +16,7 @@ import LowStockTable from "@/components/reports/LowStockTable";
 import ReportCards from "@/components/reports/ReportCards";
 import { reportsApi } from "@/features/reports/reports.api";
 
-export default function ReportsPage() {
+function ReportsContent() {
     const [loading, setLoading] = useState(true);
     const [filters, setFilters] = useState({});
     const [metrics, setMetrics] = useState(null);
@@ -182,5 +184,13 @@ export default function ReportsPage() {
                 <ReportCards />
             </section>
         </div>
+    );
+}
+
+export default function Page() {
+    return (
+        <PermissionGuard requiredPermission={PERMISSIONS.REPORTS_VIEW}>
+            <ReportsContent />
+        </PermissionGuard>
     );
 }

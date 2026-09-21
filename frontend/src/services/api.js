@@ -10,18 +10,14 @@ export const getHealth = async () => {
 
 // CSRF
 export const csrf = async () => {
-    await axios.get(
-        `${appConfig.backendUrl}/sanctum/csrf-cookie`,
-        {
-            withCredentials: true,
-        }
-    );
+    await axios.get(`${appConfig.backendUrl}/sanctum/csrf-cookie`, {
+        withCredentials: true,
+    });
 };
 
 // Login
 export const login = async (credentials) => {
     const response = await axiosInstance.post("/login", credentials);
-
     return response.data;
 };
 
@@ -34,11 +30,8 @@ export const getUser = async () => {
 // Logout
 export const logout = async () => {
     console.log("Sending logout request...");
-
     const response = await axiosInstance.post("/logout");
-
     console.log("Logout response:", response);
-
     return response.data;
 };
 

@@ -3,12 +3,15 @@
 import { useEffect, useState } from "react";
 import axiosInstance from "@/lib/axios";
 import { toast } from "react-hot-toast";
-import { 
-    Search, Package, Warehouse, MapPin, Loader2, 
-    ArrowRight, Eye, X, ChevronDown, ChevronUp 
+import { PermissionGuard } from "@/components/auth/PermissionGuard";
+import { Can } from "@/components/auth/Can";                     // ← ADDED
+import { PERMISSIONS } from "@/utils/permissions";
+import {
+    Search, Package, Warehouse, MapPin, Loader2,
+    ArrowRight, Eye, X, ChevronDown, ChevronUp
 } from "lucide-react";
 
-export default function WarehouseStoragePage() {
+function WarehouseStorageContent() {
     const [warehouses, setWarehouses] = useState([]);
     const [storageLocations, setStorageLocations] = useState([]);
     const [items, setItems] = useState([]);
@@ -19,7 +22,6 @@ export default function WarehouseStoragePage() {
     const [success, setSuccess] = useState("");
     const [searchTerm, setSearchTerm] = useState("");
 
-    // Form state
     const [showModal, setShowModal] = useState(false);
     const [form, setForm] = useState({
         warehouse_id: "",
@@ -28,7 +30,6 @@ export default function WarehouseStoragePage() {
         quantity: 1,
     });
 
-    // View items per location
     const [selectedLocation, setSelectedLocation] = useState(null);
     const [locationItems, setLocationItems] = useState([]);
     const [showLocationItemsModal, setShowLocationItemsModal] = useState(false);
@@ -55,7 +56,6 @@ export default function WarehouseStoragePage() {
             setItems(itemsRes.data?.data || []);
             setTransactions(transactionsRes.data?.data || []);
 
-            // Set default values
             if (warehousesRes.data?.data?.length > 0) {
                 setForm((prev) => ({
                     ...prev,
@@ -131,7 +131,6 @@ export default function WarehouseStoragePage() {
         try {
             setSubmitting(true);
 
-            // Create inventory transaction with location_id
             const payload = {
                 item_id: Number(form.item_id),
                 warehouse_id: Number(form.warehouse_id),
@@ -140,7 +139,7 @@ export default function WarehouseStoragePage() {
                 quantity: Number(form.quantity),
                 reference_no: `STORAGE-${Date.now()}`,
                 transaction_date: new Date().toISOString(),
-                performed_by: 1, // Will be replaced with actual user ID
+                performed_by: 1,
             };
 
             await axiosInstance.post("/inventory-transactions", payload);
@@ -172,12 +171,10 @@ export default function WarehouseStoragePage() {
         setLoadingLocationItems(true);
         setShowLocationItemsModal(true);
 
-        // Filter transactions for this location
         const locationTransactions = transactions.filter(
             (tx) => tx.location_id === location.location_id
         );
 
-        // Get unique items with their quantities
         const itemMap = {};
         locationTransactions.forEach((tx) => {
             const itemId = tx.item_id;
@@ -248,12 +245,16 @@ export default function WarehouseStoragePage() {
                         Place received items into storage locations.
                     </p>
                 </div>
-                <button
-                    onClick={handleOpenModal}
-                    className="rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-blue-700"
-                >
-                    + Place Items
-                </button>
+
+                {/* RBAC: placing items into storage writes an inventory transaction → inventory.adjust */}
+                <Can permission={PERMISSIONS.INVENTORY_ADJUST}>
+                    <button
+                        onClick={handleOpenModal}
+                        className="rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-blue-700"
+                    >
+                        + Place Items
+                    </button>
+                </Can>
             </div>
 
             {/* Stats */}
@@ -368,6 +369,7 @@ export default function WarehouseStoragePage() {
                                             </span>
                                         </td>
                                         <td className="px-4 py-3 text-center">
+                                            {/* Eye icon is read-only — no gate */}
                                             <button
                                                 onClick={() => handleViewLocationItems(location)}
                                                 className="text-blue-600 hover:text-blue-800"
@@ -410,10 +412,7 @@ export default function WarehouseStoragePage() {
                         </div>
 
                         <form onSubmit={handleSubmit} className="overflow-y-auto p-6 space-y-4 flex-1"
-                            style={{
-                                scrollbarWidth: 'none',
-                                msOverflowStyle: 'none',
-                            }}>
+                            style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
                             {error && (
                                 <div className="rounded-lg border border-red-300 bg-red-50 p-3 text-sm text-red-700">
                                     {error}
@@ -564,10 +563,7 @@ export default function WarehouseStoragePage() {
                         </div>
 
                         <div className="overflow-y-auto p-6 flex-1"
-                            style={{
-                                scrollbarWidth: 'none',
-                                msOverflowStyle: 'none',
-                            }}>
+                            style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
                             {loadingLocationItems ? (
                                 <div className="flex justify-center py-8">
                                     <Loader2 className="h-8 w-8 animate-spin text-blue-500" />
@@ -627,5 +623,13 @@ export default function WarehouseStoragePage() {
                 </div>
             )}
         </div>
+    );
+}
+
+export default function WarehouseStoragePage() {
+    return (
+        <PermissionGuard requiredPermission={PERMISSIONS.WAREHOUSING_VIEW}>
+            <WarehouseStorageContent />
+        </PermissionGuard>
     );
 }

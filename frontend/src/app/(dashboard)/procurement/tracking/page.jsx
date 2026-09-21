@@ -4,15 +4,18 @@ import { useEffect, useState } from "react";
 import axiosInstance from "@/lib/axios";
 import { toast } from "react-hot-toast";
 import {
-    FileText, CheckCircle, XCircle, Clock, 
+    FileText, CheckCircle, XCircle, Clock,
     Eye, RefreshCw, Loader2, Search, Filter,
     User, Calendar, Package, ShoppingCart,
-    AlertTriangle, Check, X, ArrowRight, 
+    AlertTriangle, Check, X, ArrowRight,
     Truck, Boxes, TrendingUp, Award,
     ChevronRight, ChevronDown, PlusCircle
 } from "lucide-react";
+import { PermissionGuard } from "@/components/auth/PermissionGuard";
+import { Can } from "@/components/auth/Can";                     // ← ADDED
+import { PERMISSIONS } from "@/utils/permissions";
 
-export default function ProcurementTrackingPage() {
+function ProcurementTrackingContent() {
     const [requests, setRequests] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState("");
@@ -294,7 +297,7 @@ export default function ProcurementTrackingPage() {
                                 const stage = getStage(request);
                                 const po = request.purchase_orders?.[0];
                                 const progress = ((stage.stage) / 4) * 100;
-                                
+
                                 return (
                                     <tr key={request.request_id} className="hover:bg-gray-50">
                                         <td className="px-4 py-3 font-medium">#{request.request_id}</td>
@@ -322,7 +325,7 @@ export default function ProcurementTrackingPage() {
                                         <td className="px-4 py-3">
                                             <div className="flex items-center justify-center gap-2">
                                                 <div className="h-2 w-24 bg-gray-200 rounded-full overflow-hidden">
-                                                    <div 
+                                                    <div
                                                         className={`h-full rounded-full ${stage.color}`}
                                                         style={{ width: `${progress}%` }}
                                                     />
@@ -331,6 +334,7 @@ export default function ProcurementTrackingPage() {
                                             </div>
                                         </td>
                                         <td className="px-4 py-3 text-center">
+                                            {/* View Details — read-only */}
                                             <button
                                                 onClick={() => handleViewRequest(request)}
                                                 className="text-blue-600 hover:text-blue-800"
@@ -421,7 +425,7 @@ export default function ProcurementTrackingPage() {
                                         })}
                                     </div>
                                     <div className="h-1 bg-gray-200 rounded-full mt-2">
-                                        <div 
+                                        <div
                                             className="h-1 bg-blue-600 rounded-full transition-all duration-500"
                                             style={{ width: `${(getStage(selectedRequest).stage / 4) * 100}%` }}
                                         />
@@ -501,17 +505,21 @@ export default function ProcurementTrackingPage() {
                                 >
                                     Close
                                 </button>
+
+                                {/* RBAC: only purchase_orders.create can create a PO from here */}
                                 {selectedRequest.status === "approved" && !selectedRequest.purchase_orders?.length && (
-                                    <button
-                                        onClick={() => {
-                                            setShowModal(false);
-                                            window.location.href = "/purchase-orders/creation";
-                                        }}
-                                        className="rounded-lg bg-blue-600 px-5 py-2.5 text-sm font-medium text-white hover:bg-blue-700 flex items-center gap-2"
-                                    >
-                                        <PlusCircle className="h-4 w-4" />
-                                        Create PO
-                                    </button>
+                                    <Can permission={PERMISSIONS.PURCHASE_ORDERS_CREATE}>
+                                        <button
+                                            onClick={() => {
+                                                setShowModal(false);
+                                                window.location.href = "/purchase-orders/creation";
+                                            }}
+                                            className="rounded-lg bg-blue-600 px-5 py-2.5 text-sm font-medium text-white hover:bg-blue-700 flex items-center gap-2"
+                                        >
+                                            <PlusCircle className="h-4 w-4" />
+                                            Create PO
+                                        </button>
+                                    </Can>
                                 )}
                             </div>
                         </div>
@@ -519,5 +527,13 @@ export default function ProcurementTrackingPage() {
                 </div>
             )}
         </div>
+    );
+}
+
+export default function ProcurementTrackingPage() {
+    return (
+        <PermissionGuard requiredPermission={PERMISSIONS.PROCUREMENT_VIEW}>
+            <ProcurementTrackingContent />
+        </PermissionGuard>
     );
 }

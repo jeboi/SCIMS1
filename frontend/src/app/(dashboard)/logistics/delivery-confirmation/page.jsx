@@ -1,5 +1,8 @@
 "use client";
 
+import { PermissionGuard } from "@/components/auth/PermissionGuard";
+import { Can } from "@/components/auth/Can";                     // ← ADDED
+import { PERMISSIONS } from "@/utils/permissions";
 import { useEffect, useState } from "react";
 import axiosInstance from "@/lib/axios";
 import { toast } from "react-hot-toast";
@@ -9,7 +12,7 @@ import {
     ArrowRight, Calendar, User, MapPin, Boxes
 } from "lucide-react";
 
-export default function DeliveryConfirmationPage() {
+function DeliveryConfirmationContent() {
     const [deliveries, setDeliveries] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState("");
@@ -55,7 +58,6 @@ export default function DeliveryConfirmationPage() {
         try {
             setConfirming(true);
 
-            // 1. Get delivery details
             const deliveryRes = await axiosInstance.get(`/deliveries/${deliveryId}`);
             const delivery = deliveryRes.data?.data;
 
@@ -64,13 +66,11 @@ export default function DeliveryConfirmationPage() {
                 return;
             }
 
-            // 2. Check if delivery has items
             if (!delivery.delivery_items || delivery.delivery_items.length === 0) {
                 toast.error("No items in this delivery to confirm.");
                 return;
             }
 
-            // 3. Create Receiving Record
             const receivingPayload = {
                 delivery_id: deliveryId,
                 warehouse_id: 1,
@@ -81,12 +81,10 @@ export default function DeliveryConfirmationPage() {
 
             await axiosInstance.post("/receiving-records", receivingPayload);
 
-            // 4. Update delivery status to "delivered"
             await axiosInstance.put(`/deliveries/${deliveryId}`, {
                 status: "delivered",
             });
 
-            // 5. For each delivery item, create inventory transaction (receiving)
             for (const item of delivery.delivery_items) {
                 await axiosInstance.post("/inventory-transactions", {
                     item_id: item.item_id,
@@ -133,7 +131,6 @@ export default function DeliveryConfirmationPage() {
 
     const filteredDeliveries = deliveries
         .filter(d => {
-            // Status filter - include in_transit in pending view
             if (filterStatus === "all") return true;
             if (filterStatus === "pending") {
                 return d.status === "pending" || d.status === "in_transit";
@@ -141,7 +138,6 @@ export default function DeliveryConfirmationPage() {
             return d.status === filterStatus;
         })
         .filter(d => {
-            // Search filter
             if (!searchTerm) return true;
             const search = searchTerm.toLowerCase();
             return (
@@ -152,7 +148,6 @@ export default function DeliveryConfirmationPage() {
         })
         .sort((a, b) => new Date(b.delivery_date) - new Date(a.delivery_date));
 
-    // Stats
     const totalDeliveries = deliveries.length;
     const pendingDeliveries = deliveries.filter(d => d.status === "pending" || d.status === "in_transit").length;
     const deliveredDeliveries = deliveries.filter(d => d.status === "delivered").length;
@@ -298,6 +293,7 @@ export default function DeliveryConfirmationPage() {
                                     </td>
                                     <td className="px-4 py-3 text-center">
                                         <div className="flex items-center justify-center gap-2">
+                                            {/* View — read-only */}
                                             <button
                                                 onClick={() => handleViewDelivery(delivery.delivery_id)}
                                                 className="text-blue-600 hover:text-blue-800"
@@ -305,15 +301,19 @@ export default function DeliveryConfirmationPage() {
                                             >
                                                 <Eye className="h-4 w-4" />
                                             </button>
+
+                                            {/* RBAC: confirming delivery requires logistics.edit */}
                                             {(delivery.status === "pending" || delivery.status === "in_transit") && (
-                                                <button
-                                                    onClick={() => handleConfirmDelivery(delivery.delivery_id)}
-                                                    disabled={confirming}
-                                                    className="text-green-600 hover:text-green-800"
-                                                    title="Confirm Delivery"
-                                                >
-                                                    <CheckCircle className="h-4 w-4" />
-                                                </button>
+                                                <Can permission={PERMISSIONS.LOGISTICS_EDIT}>
+                                                    <button
+                                                        onClick={() => handleConfirmDelivery(delivery.delivery_id)}
+                                                        disabled={confirming}
+                                                        className="text-green-600 hover:text-green-800"
+                                                        title="Confirm Delivery"
+                                                    >
+                                                        <CheckCircle className="h-4 w-4" />
+                                                    </button>
+                                                </Can>
                                             )}
                                         </div>
                                     </td>
@@ -351,7 +351,6 @@ export default function DeliveryConfirmationPage() {
                         </div>
 
                         <div className="p-6 space-y-4">
-                            {/* Delivery Info */}
                             <div className="grid grid-cols-2 gap-4">
                                 <div>
                                     <p className="text-xs font-medium uppercase text-gray-500">PO Number</p>
@@ -373,7 +372,6 @@ export default function DeliveryConfirmationPage() {
                                 </div>
                             </div>
 
-                            {/* Items */}
                             <div>
                                 <h3 className="text-sm font-semibold mb-2">Delivery Items</h3>
                                 <div className="overflow-hidden rounded-lg border">
@@ -406,7 +404,6 @@ export default function DeliveryConfirmationPage() {
                                 </div>
                             </div>
 
-                            {/* Action Buttons */}
                             <div className="flex justify-end gap-3 border-t pt-4">
                                 <button
                                     onClick={() => setShowModal(false)}
@@ -414,19 +411,23 @@ export default function DeliveryConfirmationPage() {
                                 >
                                     Close
                                 </button>
+
+                                {/* RBAC: confirming delivery requires logistics.edit */}
                                 {(selectedDelivery.status === "pending" || selectedDelivery.status === "in_transit") && (
-                                    <button
-                                        onClick={() => handleConfirmDelivery(selectedDelivery.delivery_id)}
-                                        disabled={confirming}
-                                        className="rounded-lg bg-green-600 px-5 py-2.5 text-sm font-medium text-white hover:bg-green-700 disabled:opacity-50 flex items-center gap-2"
-                                    >
-                                        {confirming ? (
-                                            <Loader2 className="h-4 w-4 animate-spin" />
-                                        ) : (
-                                            <CheckCircle className="h-4 w-4" />
-                                        )}
-                                        Confirm Delivery
-                                    </button>
+                                    <Can permission={PERMISSIONS.LOGISTICS_EDIT}>
+                                        <button
+                                            onClick={() => handleConfirmDelivery(selectedDelivery.delivery_id)}
+                                            disabled={confirming}
+                                            className="rounded-lg bg-green-600 px-5 py-2.5 text-sm font-medium text-white hover:bg-green-700 disabled:opacity-50 flex items-center gap-2"
+                                        >
+                                            {confirming ? (
+                                                <Loader2 className="h-4 w-4 animate-spin" />
+                                            ) : (
+                                                <CheckCircle className="h-4 w-4" />
+                                            )}
+                                            Confirm Delivery
+                                        </button>
+                                    </Can>
                                 )}
                             </div>
                         </div>
@@ -434,5 +435,13 @@ export default function DeliveryConfirmationPage() {
                 </div>
             )}
         </div>
+    );
+}
+
+export default function Page() {
+    return (
+        <PermissionGuard requiredPermission={PERMISSIONS.LOGISTICS_VIEW}>
+            <DeliveryConfirmationContent />
+        </PermissionGuard>
     );
 }

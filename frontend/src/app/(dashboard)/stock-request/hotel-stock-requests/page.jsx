@@ -1,10 +1,12 @@
 "use client";
 
+import { PermissionGuard } from "@/components/auth/PermissionGuard";
+import { PERMISSIONS } from "@/utils/permissions";
 import { useEffect, useState } from "react";
 import axiosInstance from "@/lib/axios";
 import Link from "next/link";
 
-export default function Page() {
+function HotelStockRequestsContent() {
     const [stockRequests, setStockRequests] = useState([]);
     const [departments, setDepartments] = useState([]);
     const [items, setItems] = useState([]);
@@ -638,5 +640,13 @@ export default function Page() {
             )}
 
         </div>
+    );
+}
+
+export default function Page() {
+    return (
+        <PermissionGuard requiredPermission={PERMISSIONS.INVENTORY_VIEW}>
+            <HotelStockRequestsContent />
+        </PermissionGuard>
     );
 }

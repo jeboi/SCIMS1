@@ -11,6 +11,9 @@ import {
     BarChart3, PieChart as PieChartIcon,
     Loader2, Package, Calendar, DollarSign
 } from "lucide-react";
+import { PermissionGuard } from "@/components/auth/PermissionGuard";
+import { Can } from "@/components/auth/Can";                     // ← ADDED
+import { PERMISSIONS } from "@/utils/permissions";
 
 import {
     BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
@@ -18,7 +21,7 @@ import {
     LineChart, Line
 } from "recharts";
 
-export default function ProcurementReportsPage() {
+function ProcurementReportsContent() {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState("");
     const [purchaseRequests, setPurchaseRequests] = useState([]);
@@ -34,23 +37,23 @@ export default function ProcurementReportsPage() {
         try {
             setLoading(true);
             setError("");
-            
+
             const [prRes, poRes, supplierRes] = await Promise.all([
                 axiosInstance.get("/purchase-requests"),
                 axiosInstance.get("/purchase-orders"),
                 axiosInstance.get("/suppliers"),
             ]);
-            
+
             const prData = prRes.data?.data || [];
             const poData = poRes.data?.data || [];
             const supplierData = supplierRes.data?.data || [];
-            
+
             setPurchaseRequests(prData);
             setPurchaseOrders(poData);
             setSuppliers(supplierData);
-            
+
             generateReport(prData, poData, supplierData);
-            
+
         } catch (err) {
             console.error(err);
             setError("Failed to load procurement data.");
@@ -61,34 +64,30 @@ export default function ProcurementReportsPage() {
     };
 
     const generateReport = (prData, poData, supplierData) => {
-        // 1. Summary Stats
         const totalRequests = prData.length;
         const totalOrders = poData.length;
         const totalSuppliers = supplierData.length;
-        
+
         const pendingRequests = prData.filter(pr => pr.status === "pending").length;
         const approvedRequests = prData.filter(pr => pr.status === "approved").length;
         const rejectedRequests = prData.filter(pr => pr.status === "rejected").length;
-        
+
         const pendingOrders = poData.filter(po => po.status === "pending").length;
         const approvedOrders = poData.filter(po => po.status === "approved").length;
         const completedOrders = poData.filter(po => po.status === "completed").length;
-        
-        // 2. Request Status Distribution
+
         const requestStatusData = [
             { name: "Pending", value: pendingRequests, color: "#f59e0b" },
             { name: "Approved", value: approvedRequests, color: "#22c55e" },
             { name: "Rejected", value: rejectedRequests, color: "#ef4444" },
         ].filter(d => d.value > 0);
-        
-        // 3. Order Status Distribution
+
         const orderStatusData = [
             { name: "Pending", value: pendingOrders, color: "#f59e0b" },
             { name: "Approved", value: approvedOrders, color: "#3b82f6" },
             { name: "Completed", value: completedOrders, color: "#22c55e" },
         ].filter(d => d.value > 0);
-        
-        // 4. Monthly Request Trend
+
         const monthlyData = {};
         prData.forEach(pr => {
             if (pr.request_date) {
@@ -104,14 +103,13 @@ export default function ProcurementReportsPage() {
             requests: data.requests,
             approved: data.approved,
         }));
-        
-        // 5. Supplier Performance
+
         const supplierPerformance = supplierData.map(supplier => {
             const supplierPOs = poData.filter(po => po.supplier_id === supplier.supplier_id);
             const completed = supplierPOs.filter(po => po.status === "completed").length;
             const pending = supplierPOs.filter(po => po.status === "pending").length;
             const approved = supplierPOs.filter(po => po.status === "approved").length;
-            
+
             return {
                 name: supplier.supplier_name,
                 total: supplierPOs.length,
@@ -122,8 +120,7 @@ export default function ProcurementReportsPage() {
                 rating: supplier.rating || 0,
             };
         }).filter(s => s.total > 0).sort((a, b) => b.total - a.total);
-        
-        // 6. Top Items Requested
+
         const itemRequestCount = {};
         prData.forEach(pr => {
             if (pr.details) {
@@ -141,11 +138,10 @@ export default function ProcurementReportsPage() {
                 name: name.length > 15 ? name.slice(0, 15) + "..." : name,
                 quantity,
             }));
-        
-        // 7. Approval Rate
+
         const approvalRate = totalRequests > 0 ? Math.round((approvedRequests / totalRequests) * 100) : 0;
         const rejectionRate = totalRequests > 0 ? Math.round((rejectedRequests / totalRequests) * 100) : 0;
-        
+
         setReportData({
             summary: {
                 totalRequests,
@@ -172,7 +168,7 @@ export default function ProcurementReportsPage() {
 
     const handleExportCSV = () => {
         if (!reportData) return;
-        
+
         const headers = ["Supplier", "Total POs", "Completed", "Pending", "Approved", "Completion Rate", "Rating"];
         const rows = reportData.supplierPerformance.map(s => [
             `"${s.name}"`,
@@ -183,12 +179,12 @@ export default function ProcurementReportsPage() {
             `${s.completionRate}%`,
             s.rating,
         ]);
-        
+
         let csv = headers.join(",") + "\n";
         rows.forEach(row => {
             csv += row.join(",") + "\n";
         });
-        
+
         const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
         const url = window.URL.createObjectURL(blob);
         const a = document.createElement('a');
@@ -239,6 +235,7 @@ export default function ProcurementReportsPage() {
                     </p>
                 </div>
                 <div className="flex flex-wrap gap-2">
+                    {/* Refresh — read-only */}
                     <button
                         onClick={loadData}
                         className="rounded-lg border px-4 py-2.5 text-sm font-medium hover:bg-gray-50 flex items-center gap-2"
@@ -246,13 +243,19 @@ export default function ProcurementReportsPage() {
                         <RefreshCw className="h-4 w-4" />
                         Refresh
                     </button>
-                    <button
-                        onClick={handleExportCSV}
-                        className="rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-blue-700 flex items-center gap-2"
-                    >
-                        <FileDown className="h-4 w-4" />
-                        Export CSV
-                    </button>
+
+                    {/* RBAC: only reports.export can export */}
+                    <Can permission={PERMISSIONS.REPORTS_EXPORT}>
+                        <button
+                            onClick={handleExportCSV}
+                            className="rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-blue-700 flex items-center gap-2"
+                        >
+                            <FileDown className="h-4 w-4" />
+                            Export CSV
+                        </button>
+                    </Can>
+
+                    {/* Print — read-only */}
                     <button
                         onClick={() => {
                             const printWindow = window.open('', '_blank', 'width=1200,height=800');
@@ -348,7 +351,6 @@ export default function ProcurementReportsPage() {
 
             {/* Charts */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                {/* Request Status Distribution */}
                 <div className="bg-white rounded-lg border p-4">
                     <h3 className="text-sm font-semibold mb-2">Request Status</h3>
                     <div className="h-64">
@@ -374,7 +376,6 @@ export default function ProcurementReportsPage() {
                     </div>
                 </div>
 
-                {/* Order Status Distribution */}
                 <div className="bg-white rounded-lg border p-4">
                     <h3 className="text-sm font-semibold mb-2">Order Status</h3>
                     <div className="h-64">
@@ -400,7 +401,6 @@ export default function ProcurementReportsPage() {
                     </div>
                 </div>
 
-                {/* Monthly Request Trend */}
                 {reportData.monthlyTrend.length > 0 && (
                     <div className="bg-white rounded-lg border p-4 lg:col-span-2">
                         <h3 className="text-sm font-semibold mb-2">Monthly Request Trend</h3>
@@ -471,7 +471,7 @@ export default function ProcurementReportsPage() {
                                         <td className="px-4 py-2 text-center">
                                             <div className="flex items-center justify-center gap-2">
                                                 <div className="h-2 w-16 bg-gray-200 rounded-full overflow-hidden">
-                                                    <div 
+                                                    <div
                                                         className={`h-full rounded-full ${
                                                             supplier.completionRate > 80 ? 'bg-green-500' :
                                                             supplier.completionRate > 50 ? 'bg-yellow-500' :
@@ -496,5 +496,13 @@ export default function ProcurementReportsPage() {
                 )}
             </div>
         </div>
+    );
+}
+
+export default function ProcurementReportsPage() {
+    return (
+        <PermissionGuard requiredPermission={PERMISSIONS.REPORTS_VIEW}>
+            <ProcurementReportsContent />
+        </PermissionGuard>
     );
 }

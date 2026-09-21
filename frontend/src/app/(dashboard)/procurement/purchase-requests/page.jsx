@@ -2,8 +2,11 @@
 
 import { useEffect, useState } from "react";
 import axiosInstance from "@/lib/axios";
+import { PermissionGuard } from "@/components/auth/PermissionGuard";
+import { Can } from "@/components/auth/Can";                     // ← ADDED
+import { PERMISSIONS } from "@/utils/permissions";
 
-export default function Page() {
+function PurchaseRequestsContent() {
     const [purchaseRequests, setPurchaseRequests] = useState([]);
     const [items, setItems] = useState([]);
     const [currentUser, setCurrentUser] = useState(null);
@@ -302,236 +305,238 @@ export default function Page() {
 
             {!loading && (
                 <>
-                    {/* Create Purchase Request */}
-                    <form
-                        onSubmit={handleSubmit}
-                        className="mb-6 rounded-lg border bg-white p-6"
-                    >
-                        <div className="mb-6">
-                            <h2 className="text-lg font-semibold">
-                                Create Purchase Request
-                            </h2>
+                    {/* RBAC: only procurement.create can see the create form */}
+                    <Can permission={PERMISSIONS.PROCUREMENT_CREATE}>
+                        <form
+                            onSubmit={handleSubmit}
+                            className="mb-6 rounded-lg border bg-white p-6"
+                        >
+                            <div className="mb-6">
+                                <h2 className="text-lg font-semibold">
+                                    Create Purchase Request
+                                </h2>
 
-                            <p className="mt-1 text-sm text-gray-500">
-                                Submit a request for items that need to
-                                be purchased.
-                            </p>
-                        </div>
+                                <p className="mt-1 text-sm text-gray-500">
+                                    Submit a request for items that need to
+                                    be purchased.
+                                </p>
+                            </div>
 
-                        {/* Request Date */}
-                        <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
-                            <div>
+                            {/* Request Date */}
+                            <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
+                                <div>
+                                    <label className="mb-2 block text-sm font-medium">
+                                        Request Date
+                                    </label>
+
+                                    <input
+                                        type="date"
+                                        value={requestDate}
+                                        onChange={(event) =>
+                                            setRequestDate(
+                                                event.target.value
+                                            )
+                                        }
+                                        className="w-full rounded-lg border px-4 py-3 text-sm outline-none"
+                                    />
+                                </div>
+
+                                <div>
+                                    <label className="mb-2 block text-sm font-medium">
+                                        Requested By
+                                    </label>
+
+                                    <input
+                                        type="text"
+                                        value={
+                                            currentUser?.name || "Loading..."
+                                        }
+                                        readOnly
+                                        className="w-full rounded-lg border bg-gray-50 px-4 py-3 text-sm outline-none"
+                                    />
+                                </div>
+                            </div>
+
+                            {/* Add Items */}
+                            <div className="mt-6">
                                 <label className="mb-2 block text-sm font-medium">
-                                    Request Date
+                                    Add Items
                                 </label>
 
-                                <input
-                                    type="date"
-                                    value={requestDate}
+                                <div className="grid grid-cols-1 gap-3 md:grid-cols-[1fr_130px_auto]">
+                                    <select
+                                        value={selectedItemId}
+                                        onChange={(event) =>
+                                            setSelectedItemId(
+                                                event.target.value
+                                            )
+                                        }
+                                        className="rounded-lg border px-4 py-3 text-sm outline-none"
+                                    >
+                                        <option value="">
+                                            Select item
+                                        </option>
+
+                                        {items.map((item) => (
+                                            <option
+                                                key={item.item_id}
+                                                value={item.item_id}
+                                            >
+                                                {item.item_name} (
+                                                {item.unit})
+                                            </option>
+                                        ))}
+                                    </select>
+
+                                    <input
+                                        type="number"
+                                        min="1"
+                                        value={quantity}
+                                        onChange={(event) =>
+                                            setQuantity(
+                                                event.target.value
+                                            )
+                                        }
+                                        className="rounded-lg border px-4 py-3 text-sm outline-none"
+                                    />
+
+                                    <button
+                                        type="button"
+                                        onClick={handleAddItem}
+                                        className="rounded-lg border px-5 py-3 text-sm font-medium hover:bg-gray-50"
+                                    >
+                                        Add Item
+                                    </button>
+                                </div>
+                            </div>
+
+                            {/* Selected Items */}
+                            <div className="mt-6">
+                                <label className="mb-2 block text-sm font-medium">
+                                    Requested Items
+                                </label>
+
+                                <div className="overflow-hidden rounded-lg border">
+                                    {selectedItems.length === 0 ? (
+                                        <div className="p-8 text-center text-sm text-gray-500">
+                                            No items added yet.
+                                        </div>
+                                    ) : (
+                                        <table className="w-full">
+                                            <thead className="border-b bg-gray-50">
+                                                <tr>
+                                                    <th className="px-4 py-3 text-left text-sm font-medium">
+                                                        Item
+                                                    </th>
+
+                                                    <th className="px-4 py-3 text-left text-sm font-medium">
+                                                        Unit
+                                                    </th>
+
+                                                    <th className="px-4 py-3 text-left text-sm font-medium">
+                                                        Quantity
+                                                    </th>
+
+                                                    <th className="px-4 py-3 text-right text-sm font-medium">
+                                                        Action
+                                                    </th>
+                                                </tr>
+                                            </thead>
+
+                                            <tbody>
+                                                {selectedItems.map(
+                                                    (item) => (
+                                                        <tr
+                                                            key={
+                                                                item.item_id
+                                                            }
+                                                            className="border-b last:border-b-0"
+                                                        >
+                                                            <td className="px-4 py-3 text-sm">
+                                                                {
+                                                                    item.item_name
+                                                                }
+                                                            </td>
+
+                                                            <td className="px-4 py-3 text-sm">
+                                                                {
+                                                                    item.unit
+                                                                }
+                                                            </td>
+
+                                                            <td className="px-4 py-3 text-sm">
+                                                                {
+                                                                    item.quantity
+                                                                }
+                                                            </td>
+
+                                                            <td className="px-4 py-3 text-right">
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={() =>
+                                                                        handleRemoveItem(
+                                                                            item.item_id
+                                                                        )
+                                                                    }
+                                                                    className="text-sm font-medium text-red-600 hover:text-red-700"
+                                                                >
+                                                                    Remove
+                                                                </button>
+                                                            </td>
+                                                        </tr>
+                                                    )
+                                                )}
+                                            </tbody>
+                                        </table>
+                                    )}
+                                </div>
+                            </div>
+
+                            {/* Remarks */}
+                            <div className="mt-6">
+                                <label className="mb-2 block text-sm font-medium">
+                                    Remarks
+                                </label>
+
+                                <textarea
+                                    value={remarks}
                                     onChange={(event) =>
-                                        setRequestDate(
-                                            event.target.value
-                                        )
+                                        setRemarks(event.target.value)
                                     }
+                                    rows={4}
+                                    placeholder="Enter additional remarks..."
                                     className="w-full rounded-lg border px-4 py-3 text-sm outline-none"
                                 />
                             </div>
 
-                            <div>
-                                <label className="mb-2 block text-sm font-medium">
-                                    Requested By
-                                </label>
-
-                                <input
-                                    type="text"
-                                    value={
-                                        currentUser?.name || "Loading..."
-                                    }
-                                    readOnly
-                                    className="w-full rounded-lg border bg-gray-50 px-4 py-3 text-sm outline-none"
-                                />
-                            </div>
-                        </div>
-
-                        {/* Add Items */}
-                        <div className="mt-6">
-                            <label className="mb-2 block text-sm font-medium">
-                                Add Items
-                            </label>
-
-                            <div className="grid grid-cols-1 gap-3 md:grid-cols-[1fr_130px_auto]">
-                                <select
-                                    value={selectedItemId}
-                                    onChange={(event) =>
-                                        setSelectedItemId(
-                                            event.target.value
-                                        )
-                                    }
-                                    className="rounded-lg border px-4 py-3 text-sm outline-none"
-                                >
-                                    <option value="">
-                                        Select item
-                                    </option>
-
-                                    {items.map((item) => (
-                                        <option
-                                            key={item.item_id}
-                                            value={item.item_id}
-                                        >
-                                            {item.item_name} (
-                                            {item.unit})
-                                        </option>
-                                    ))}
-                                </select>
-
-                                <input
-                                    type="number"
-                                    min="1"
-                                    value={quantity}
-                                    onChange={(event) =>
-                                        setQuantity(
-                                            event.target.value
-                                        )
-                                    }
-                                    className="rounded-lg border px-4 py-3 text-sm outline-none"
-                                />
-
+                            {/* Buttons */}
+                            <div className="mt-6 flex justify-end gap-3">
                                 <button
                                     type="button"
-                                    onClick={handleAddItem}
+                                    onClick={() => {
+                                        setSelectedItems([]);
+                                        setQuantity(1);
+                                        setRemarks("");
+                                        setError("");
+                                        setSuccess("");
+                                    }}
                                     className="rounded-lg border px-5 py-3 text-sm font-medium hover:bg-gray-50"
                                 >
-                                    Add Item
+                                    Clear
+                                </button>
+
+                                <button
+                                    type="submit"
+                                    disabled={submitting}
+                                    className="rounded-lg bg-blue-600 px-5 py-3 text-sm font-medium text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
+                                >
+                                    {submitting
+                                        ? "Submitting..."
+                                        : "Submit Request"}
                                 </button>
                             </div>
-                        </div>
-
-                        {/* Selected Items */}
-                        <div className="mt-6">
-                            <label className="mb-2 block text-sm font-medium">
-                                Requested Items
-                            </label>
-
-                            <div className="overflow-hidden rounded-lg border">
-                                {selectedItems.length === 0 ? (
-                                    <div className="p-8 text-center text-sm text-gray-500">
-                                        No items added yet.
-                                    </div>
-                                ) : (
-                                    <table className="w-full">
-                                        <thead className="border-b bg-gray-50">
-                                            <tr>
-                                                <th className="px-4 py-3 text-left text-sm font-medium">
-                                                    Item
-                                                </th>
-
-                                                <th className="px-4 py-3 text-left text-sm font-medium">
-                                                    Unit
-                                                </th>
-
-                                                <th className="px-4 py-3 text-left text-sm font-medium">
-                                                    Quantity
-                                                </th>
-
-                                                <th className="px-4 py-3 text-right text-sm font-medium">
-                                                    Action
-                                                </th>
-                                            </tr>
-                                        </thead>
-
-                                        <tbody>
-                                            {selectedItems.map(
-                                                (item) => (
-                                                    <tr
-                                                        key={
-                                                            item.item_id
-                                                        }
-                                                        className="border-b last:border-b-0"
-                                                    >
-                                                        <td className="px-4 py-3 text-sm">
-                                                            {
-                                                                item.item_name
-                                                            }
-                                                        </td>
-
-                                                        <td className="px-4 py-3 text-sm">
-                                                            {
-                                                                item.unit
-                                                            }
-                                                        </td>
-
-                                                        <td className="px-4 py-3 text-sm">
-                                                            {
-                                                                item.quantity
-                                                            }
-                                                        </td>
-
-                                                        <td className="px-4 py-3 text-right">
-                                                            <button
-                                                                type="button"
-                                                                onClick={() =>
-                                                                    handleRemoveItem(
-                                                                        item.item_id
-                                                                    )
-                                                                }
-                                                                className="text-sm font-medium text-red-600 hover:text-red-700"
-                                                            >
-                                                                Remove
-                                                            </button>
-                                                        </td>
-                                                    </tr>
-                                                )
-                                            )}
-                                        </tbody>
-                                    </table>
-                                )}
-                            </div>
-                        </div>
-
-                        {/* Remarks */}
-                        <div className="mt-6">
-                            <label className="mb-2 block text-sm font-medium">
-                                Remarks
-                            </label>
-
-                            <textarea
-                                value={remarks}
-                                onChange={(event) =>
-                                    setRemarks(event.target.value)
-                                }
-                                rows={4}
-                                placeholder="Enter additional remarks..."
-                                className="w-full rounded-lg border px-4 py-3 text-sm outline-none"
-                            />
-                        </div>
-
-                        {/* Buttons */}
-                        <div className="mt-6 flex justify-end gap-3">
-                            <button
-                                type="button"
-                                onClick={() => {
-                                    setSelectedItems([]);
-                                    setQuantity(1);
-                                    setRemarks("");
-                                    setError("");
-                                    setSuccess("");
-                                }}
-                                className="rounded-lg border px-5 py-3 text-sm font-medium hover:bg-gray-50"
-                            >
-                                Clear
-                            </button>
-
-                            <button
-                                type="submit"
-                                disabled={submitting}
-                                className="rounded-lg bg-blue-600 px-5 py-3 text-sm font-medium text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
-                            >
-                                {submitting
-                                    ? "Submitting..."
-                                    : "Submit Request"}
-                            </button>
-                        </div>
-                    </form>
+                        </form>
+                    </Can>
 
                     {/* Purchase Requests Table */}
                     <div className="overflow-hidden rounded-lg border bg-white">
@@ -595,8 +600,8 @@ export default function Page() {
                                                 </td>
 
                                                 <td className="px-4 py-4 text-sm">
-    {request.requestedBy?.name || request.requested_by?.name || "—"}
-</td>
+                                                    {request.requestedBy?.name || request.requested_by?.name || "—"}
+                                                </td>
 
                                                 <td className="px-4 py-4 text-sm">
                                                     {request.request_date
@@ -629,6 +634,7 @@ export default function Page() {
                                                 </td>
 
                                                 <td className="px-4 py-4 text-right">
+                                                    {/* View is read-only */}
                                                     <button
                                                         type="button"
                                                         onClick={() =>
@@ -651,160 +657,164 @@ export default function Page() {
                 </>
             )}
 
-{/* View Details Modal */}
-{selectedRequest && (
-    <div
-        className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
-        onClick={handleCloseDetails}
-    >
-        <div
-            className="max-h-[90vh] w-full max-w-3xl overflow-y-auto rounded-xl bg-white shadow-xl"
-            onClick={(event) => event.stopPropagation()}
-        >
-            <div className="flex items-center justify-between border-b px-6 py-4">
-                <div>
-                    <h2 className="text-lg font-semibold">
-                        Purchase Request #{selectedRequest.request_id}
-                    </h2>
-                    <p className="mt-1 text-sm text-gray-500">Request details</p>
-                </div>
-                <button
-                    type="button"
+            {/* View Details Modal */}
+            {selectedRequest && (
+                <div
+                    className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
                     onClick={handleCloseDetails}
-                    className="text-2xl leading-none text-gray-400 hover:text-gray-700"
                 >
-                    ×
-                </button>
-            </div>
-
-            {loadingDetails ? (
-                <div className="p-8 text-center text-sm text-gray-500">
-                    Loading request details...
-                </div>
-            ) : (
-                <div className="p-6">
-                    {/* Request Information */}
-                    <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                        <div>
-                            <p className="text-xs font-medium uppercase text-gray-500">Requested By</p>
-                            <p className="mt-1 text-sm font-medium">
-                                {selectedRequest.requestedBy?.name || selectedRequest.requested_by?.name || "—"}
-                            </p>
+                    <div
+                        className="max-h-[90vh] w-full max-w-3xl overflow-y-auto rounded-xl bg-white shadow-xl"
+                        onClick={(event) => event.stopPropagation()}
+                    >
+                        <div className="flex items-center justify-between border-b px-6 py-4">
+                            <div>
+                                <h2 className="text-lg font-semibold">
+                                    Purchase Request #{selectedRequest.request_id}
+                                </h2>
+                                <p className="mt-1 text-sm text-gray-500">Request details</p>
+                            </div>
+                            <button
+                                type="button"
+                                onClick={handleCloseDetails}
+                                className="text-2xl leading-none text-gray-400 hover:text-gray-700"
+                            >
+                                ×
+                            </button>
                         </div>
 
-                        <div>
-                            <p className="text-xs font-medium uppercase text-gray-500">Request Date</p>
-                            <p className="mt-1 text-sm font-medium">
-                                {selectedRequest.request_date
-                                    ? new Date(selectedRequest.request_date).toLocaleDateString()
-                                    : "—"}
-                            </p>
-                        </div>
-
-                        <div>
-                            <p className="text-xs font-medium uppercase text-gray-500">Status</p>
-                            <p className="mt-1 text-sm font-medium capitalize">
-                                {selectedRequest.status || "—"}
-                            </p>
-                        </div>
-
-                        <div>
-                            <p className="text-xs font-medium uppercase text-gray-500">Remarks</p>
-                            <p className="mt-1 text-sm font-medium">
-                                {selectedRequest.remarks || "—"}
-                            </p>
-                        </div>
-                    </div>
-
-                    {/* Requested Items */}
-                    <div className="mt-6">
-                        <h3 className="mb-3 text-sm font-semibold">Requested Items</h3>
-                        <div className="overflow-hidden rounded-lg border">
-                            {selectedRequest.details?.length ? (
-                                <table className="w-full">
-                                    <thead className="border-b bg-gray-50">
-                                        <tr>
-                                            <th className="px-4 py-3 text-left text-sm font-medium">Item</th>
-                                            <th className="px-4 py-3 text-left text-sm font-medium">Unit</th>
-                                            <th className="px-4 py-3 text-right text-sm font-medium">Quantity</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        {selectedRequest.details.map((detail) => (
-                                            <tr key={detail.pr_detail_id} className="border-b last:border-b-0">
-                                                <td className="px-4 py-3 text-sm">
-                                                    {detail.item?.item_name || "—"}
-                                                </td>
-                                                <td className="px-4 py-3 text-sm">
-                                                    {detail.item?.unit || "—"}
-                                                </td>
-                                                <td className="px-4 py-3 text-right text-sm">
-                                                    {detail.quantity}
-                                                </td>
-                                            </tr>
-                                        ))}
-                                    </tbody>
-                                </table>
-                            ) : (
-                                <div className="p-6 text-center text-sm text-gray-500">
-                                    No items found for this request.
-                                </div>
-                            )}
-                        </div>
-                    </div>
-
-                    {/* Purchase Orders */}
-                    <div className="mt-6">
-                        <h3 className="mb-3 text-sm font-semibold">Purchase Orders</h3>
-                        {selectedRequest.purchase_orders?.length ? (
-                            <div className="overflow-hidden rounded-lg border">
-                                <table className="w-full">
-                                    <thead className="border-b bg-gray-50">
-                                        <tr>
-                                            <th className="px-4 py-3 text-left text-sm font-medium">PO ID</th>
-                                            <th className="px-4 py-3 text-left text-sm font-medium">Supplier</th>
-                                            <th className="px-4 py-3 text-left text-sm font-medium">Status</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        {selectedRequest.purchase_orders.map((order) => (
-                                            <tr key={order.po_id || order.purchase_order_id} className="border-b last:border-b-0">
-                                                <td className="px-4 py-3 text-sm">
-                                                    #{order.po_id || order.purchase_order_id || "—"}
-                                                </td>
-                                                <td className="px-4 py-3 text-sm">
-                                                    {order.supplier?.supplier_name || order.supplier?.name || "—"}
-                                                </td>
-                                                <td className="px-4 py-3 text-sm capitalize">
-                                                    {order.status || "—"}
-                                                </td>
-                                            </tr>
-                                        ))}
-                                    </tbody>
-                                </table>
+                        {loadingDetails ? (
+                            <div className="p-8 text-center text-sm text-gray-500">
+                                Loading request details...
                             </div>
                         ) : (
-                            <div className="rounded-lg border p-6 text-center text-sm text-gray-500">
-                                No purchase orders linked to this request.
+                            <div className="p-6">
+                                <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                                    <div>
+                                        <p className="text-xs font-medium uppercase text-gray-500">Requested By</p>
+                                        <p className="mt-1 text-sm font-medium">
+                                            {selectedRequest.requestedBy?.name || selectedRequest.requested_by?.name || "—"}
+                                        </p>
+                                    </div>
+
+                                    <div>
+                                        <p className="text-xs font-medium uppercase text-gray-500">Request Date</p>
+                                        <p className="mt-1 text-sm font-medium">
+                                            {selectedRequest.request_date
+                                                ? new Date(selectedRequest.request_date).toLocaleDateString()
+                                                : "—"}
+                                        </p>
+                                    </div>
+
+                                    <div>
+                                        <p className="text-xs font-medium uppercase text-gray-500">Status</p>
+                                        <p className="mt-1 text-sm font-medium capitalize">
+                                            {selectedRequest.status || "—"}
+                                        </p>
+                                    </div>
+
+                                    <div>
+                                        <p className="text-xs font-medium uppercase text-gray-500">Remarks</p>
+                                        <p className="mt-1 text-sm font-medium">
+                                            {selectedRequest.remarks || "—"}
+                                        </p>
+                                    </div>
+                                </div>
+
+                                <div className="mt-6">
+                                    <h3 className="mb-3 text-sm font-semibold">Requested Items</h3>
+                                    <div className="overflow-hidden rounded-lg border">
+                                        {selectedRequest.details?.length ? (
+                                            <table className="w-full">
+                                                <thead className="border-b bg-gray-50">
+                                                    <tr>
+                                                        <th className="px-4 py-3 text-left text-sm font-medium">Item</th>
+                                                        <th className="px-4 py-3 text-left text-sm font-medium">Unit</th>
+                                                        <th className="px-4 py-3 text-right text-sm font-medium">Quantity</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody>
+                                                    {selectedRequest.details.map((detail) => (
+                                                        <tr key={detail.pr_detail_id} className="border-b last:border-b-0">
+                                                            <td className="px-4 py-3 text-sm">
+                                                                {detail.item?.item_name || "—"}
+                                                            </td>
+                                                            <td className="px-4 py-3 text-sm">
+                                                                {detail.item?.unit || "—"}
+                                                            </td>
+                                                            <td className="px-4 py-3 text-right text-sm">
+                                                                {detail.quantity}
+                                                            </td>
+                                                        </tr>
+                                                    ))}
+                                                </tbody>
+                                            </table>
+                                        ) : (
+                                            <div className="p-6 text-center text-sm text-gray-500">
+                                                No items found for this request.
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+
+                                <div className="mt-6">
+                                    <h3 className="mb-3 text-sm font-semibold">Purchase Orders</h3>
+                                    {selectedRequest.purchase_orders?.length ? (
+                                        <div className="overflow-hidden rounded-lg border">
+                                            <table className="w-full">
+                                                <thead className="border-b bg-gray-50">
+                                                    <tr>
+                                                        <th className="px-4 py-3 text-left text-sm font-medium">PO ID</th>
+                                                        <th className="px-4 py-3 text-left text-sm font-medium">Supplier</th>
+                                                        <th className="px-4 py-3 text-left text-sm font-medium">Status</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody>
+                                                    {selectedRequest.purchase_orders.map((order) => (
+                                                        <tr key={order.po_id || order.purchase_order_id} className="border-b last:border-b-0">
+                                                            <td className="px-4 py-3 text-sm">
+                                                                #{order.po_id || order.purchase_order_id || "—"}
+                                                            </td>
+                                                            <td className="px-4 py-3 text-sm">
+                                                                {order.supplier?.supplier_name || order.supplier?.name || "—"}
+                                                            </td>
+                                                            <td className="px-4 py-3 text-sm capitalize">
+                                                                {order.status || "—"}
+                                                            </td>
+                                                        </tr>
+                                                    ))}
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    ) : (
+                                        <div className="rounded-lg border p-6 text-center text-sm text-gray-500">
+                                            No purchase orders linked to this request.
+                                        </div>
+                                    )}
+                                </div>
+
+                                <div className="mt-6 flex justify-end">
+                                    <button
+                                        type="button"
+                                        onClick={handleCloseDetails}
+                                        className="rounded-lg border px-5 py-3 text-sm font-medium hover:bg-gray-50"
+                                    >
+                                        Close
+                                    </button>
+                                </div>
                             </div>
                         )}
-                    </div>
-
-                    {/* Close */}
-                    <div className="mt-6 flex justify-end">
-                        <button
-                            type="button"
-                            onClick={handleCloseDetails}
-                            className="rounded-lg border px-5 py-3 text-sm font-medium hover:bg-gray-50"
-                        >
-                            Close
-                        </button>
                     </div>
                 </div>
             )}
         </div>
-    </div>
-)}
-        </div>
+    );
+}
+
+export default function PurchaseRequestsPage() {
+    return (
+        <PermissionGuard requiredPermission={PERMISSIONS.PROCUREMENT_VIEW}>
+            <PurchaseRequestsContent />
+        </PermissionGuard>
     );
 }

@@ -7,6 +7,8 @@ import { useAuth } from "@/context/AuthContext";
 import { toast } from "react-hot-toast";
 import { getDashboardMetrics } from "@/services/api";
 import axiosInstance from "@/lib/axios";
+import { PermissionGuard } from "@/components/auth/PermissionGuard";
+import { PERMISSIONS } from "@/utils/permissions";
 
 import {
     ArrowUpRight,
@@ -90,7 +92,7 @@ const quickActions = [
     { title: "View Reports", icon: FileText, href: "/inventory/reports", color: "bg-orange-50 text-orange-600" },
 ];
 
-export default function DashboardPage() {
+function DashboardContent() {
     const { user } = useAuth();
     
     const [dashboardMetrics, setDashboardMetrics] = useState({
@@ -204,11 +206,6 @@ export default function DashboardPage() {
             clearInterval(interval);
         };
     }, []);
-
-    // Add axios import for additional data fetching
-    // Note: Make sure axiosInstance is imported or use the existing one
-    // If axiosInstance is not available, add this import at the top:
-    // import axiosInstance from "@/lib/axios";
 
     // Calculate Dynamic Inventory Status Counts
     const totalItems = dashboardMetrics.totalItemsHistory.slice(-1)[0]?.value || 0;
@@ -662,5 +659,13 @@ export default function DashboardPage() {
                 </div>
             </section>
         </div>
+    );
+}
+
+export default function DashboardPage() {
+    return (
+        <PermissionGuard requiredPermission={PERMISSIONS.DASHBOARD_VIEW}>
+            <DashboardContent />
+        </PermissionGuard>
     );
 }

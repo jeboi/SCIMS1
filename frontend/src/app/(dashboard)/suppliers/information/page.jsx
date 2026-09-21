@@ -10,8 +10,11 @@ import {
     FileText, MapPin, Phone, Mail, Building,
     RefreshCw, Plus, Trash2, Save, X
 } from "lucide-react";
+import { PermissionGuard } from "@/components/auth/PermissionGuard";
+import { Can, CanAny } from "@/components/auth/Can";             // ← ADDED
+import { PERMISSIONS } from "@/utils/permissions";
 
-export default function SupplierInformationPage() {
+function SupplierInformationContent() {
     const [suppliers, setSuppliers] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState("");
@@ -41,14 +44,14 @@ export default function SupplierInformationPage() {
         try {
             setLoading(true);
             setError("");
-            
+
             const [suppliersRes] = await Promise.all([
                 axiosInstance.get("/suppliers"),
             ]);
-            
+
             const suppliersData = suppliersRes.data?.data || [];
             setSuppliers(suppliersData);
-            
+
         } catch (err) {
             console.error(err);
             setError("Failed to load supplier data.");
@@ -125,7 +128,7 @@ export default function SupplierInformationPage() {
         const numericRating = typeof rating === 'string' ? parseFloat(rating) : (rating || 0);
         const fullStars = Math.floor(numericRating);
         const emptyStars = 5 - fullStars;
-        
+
         return (
             <span className="flex items-center gap-0.5">
                 {[...Array(Math.max(0, fullStars))].map((_, i) => (
@@ -146,7 +149,7 @@ export default function SupplierInformationPage() {
                 s.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
                 s.phone?.toLowerCase().includes(searchTerm.toLowerCase());
             const matchesStatus = filterStatus === "all" || s.status === filterStatus;
-            const matchesRating = filterRating === "all" || 
+            const matchesRating = filterRating === "all" ||
                 (filterRating === "high" && parseFloat(s.rating || 0) >= 4) ||
                 (filterRating === "medium" && parseFloat(s.rating || 0) >= 2.5 && parseFloat(s.rating || 0) < 4) ||
                 (filterRating === "low" && parseFloat(s.rating || 0) < 2.5 && parseFloat(s.rating || 0) > 0) ||
@@ -155,7 +158,6 @@ export default function SupplierInformationPage() {
         })
         .sort((a, b) => parseFloat(b.rating || 0) - parseFloat(a.rating || 0));
 
-    // Stats
     const totalSuppliers = suppliers.length;
     const activeSuppliers = suppliers.filter(s => s.status === "active").length;
     const inactiveSuppliers = suppliers.filter(s => s.status === "inactive").length;
@@ -194,13 +196,18 @@ export default function SupplierInformationPage() {
                     </p>
                 </div>
                 <div className="flex flex-wrap gap-2">
-                    <button
-                        onClick={() => window.location.href = "/suppliers/registration"}
-                        className="rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-blue-700 flex items-center gap-2"
-                    >
-                        <Plus className="h-4 w-4" />
-                        Add Supplier
-                    </button>
+                    {/* RBAC: adding suppliers requires suppliers.create */}
+                    <Can permission={PERMISSIONS.SUPPLIERS_CREATE}>
+                        <button
+                            onClick={() => window.location.href = "/suppliers/registration"}
+                            className="rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-blue-700 flex items-center gap-2"
+                        >
+                            <Plus className="h-4 w-4" />
+                            Add Supplier
+                        </button>
+                    </Can>
+
+                    {/* Refresh — read-only */}
                     <button
                         onClick={loadData}
                         className="rounded-lg border px-4 py-2.5 text-sm font-medium hover:bg-gray-50 flex items-center gap-2"
@@ -299,7 +306,14 @@ export default function SupplierInformationPage() {
                             <th className="px-4 py-3 text-left font-medium">Email</th>
                             <th className="px-4 py-3 text-center font-medium">Rating</th>
                             <th className="px-4 py-3 text-center font-medium">Status</th>
-                            <th className="px-4 py-3 text-center font-medium">Actions</th>
+
+                            {/* RBAC: hide Actions column if user can't edit/delete */}
+                            <CanAny permissions={[
+                                PERMISSIONS.SUPPLIERS_EDIT,
+                                PERMISSIONS.SUPPLIERS_DELETE,
+                            ]}>
+                                <th className="px-4 py-3 text-center font-medium">Actions</th>
+                            </CanAny>
                         </tr>
                     </thead>
                     <tbody className="divide-y">
@@ -324,31 +338,44 @@ export default function SupplierInformationPage() {
                                             {supplier.status || "active"}
                                         </span>
                                     </td>
-                                    <td className="px-4 py-3 text-center">
-                                        <div className="flex items-center justify-center gap-2">
-                                            <button
-                                                onClick={() => handleViewSupplier(supplier)}
-                                                className="text-blue-600 hover:text-blue-800"
-                                                title="View Details"
-                                            >
-                                                <Eye className="h-4 w-4" />
-                                            </button>
-                                            <button
-                                                onClick={() => handleEditSupplier(supplier)}
-                                                className="text-yellow-600 hover:text-yellow-800"
-                                                title="Edit Supplier"
-                                            >
-                                                <Edit className="h-4 w-4" />
-                                            </button>
-                                            <button
-                                                onClick={() => handleDeleteSupplier(supplier.supplier_id)}
-                                                className="text-red-600 hover:text-red-800"
-                                                title="Delete Supplier"
-                                            >
-                                                <Trash2 className="h-4 w-4" />
-                                            </button>
-                                        </div>
-                                    </td>
+
+                                    <CanAny permissions={[
+                                        PERMISSIONS.SUPPLIERS_EDIT,
+                                        PERMISSIONS.SUPPLIERS_DELETE,
+                                    ]}>
+                                        <td className="px-4 py-3 text-center">
+                                            <div className="flex items-center justify-center gap-2">
+                                                {/* View is read-only */}
+                                                <button
+                                                    onClick={() => handleViewSupplier(supplier)}
+                                                    className="text-blue-600 hover:text-blue-800"
+                                                    title="View Details"
+                                                >
+                                                    <Eye className="h-4 w-4" />
+                                                </button>
+
+                                                <Can permission={PERMISSIONS.SUPPLIERS_EDIT}>
+                                                    <button
+                                                        onClick={() => handleEditSupplier(supplier)}
+                                                        className="text-yellow-600 hover:text-yellow-800"
+                                                        title="Edit Supplier"
+                                                    >
+                                                        <Edit className="h-4 w-4" />
+                                                    </button>
+                                                </Can>
+
+                                                <Can permission={PERMISSIONS.SUPPLIERS_DELETE}>
+                                                    <button
+                                                        onClick={() => handleDeleteSupplier(supplier.supplier_id)}
+                                                        className="text-red-600 hover:text-red-800"
+                                                        title="Delete Supplier"
+                                                    >
+                                                        <Trash2 className="h-4 w-4" />
+                                                    </button>
+                                                </Can>
+                                            </div>
+                                        </td>
+                                    </CanAny>
                                 </tr>
                             ))
                         )}
@@ -383,7 +410,6 @@ export default function SupplierInformationPage() {
                         </div>
 
                         <div className="p-6 space-y-4">
-                            {/* Supplier Info */}
                             <div className="grid grid-cols-2 gap-4">
                                 <div>
                                     <p className="text-xs font-medium uppercase text-gray-500">Contact Person</p>
@@ -422,16 +448,19 @@ export default function SupplierInformationPage() {
                             </div>
 
                             <div className="flex justify-end gap-3 border-t pt-4">
-                                <button
-                                    onClick={() => {
-                                        setShowModal(false);
-                                        handleEditSupplier(selectedSupplier);
-                                    }}
-                                    className="rounded-lg bg-yellow-600 px-5 py-2.5 text-sm font-medium text-white hover:bg-yellow-700 flex items-center gap-2"
-                                >
-                                    <Edit className="h-4 w-4" />
-                                    Edit Supplier
-                                </button>
+                                {/* RBAC: Edit button in view modal requires suppliers.edit */}
+                                <Can permission={PERMISSIONS.SUPPLIERS_EDIT}>
+                                    <button
+                                        onClick={() => {
+                                            setShowModal(false);
+                                            handleEditSupplier(selectedSupplier);
+                                        }}
+                                        className="rounded-lg bg-yellow-600 px-5 py-2.5 text-sm font-medium text-white hover:bg-yellow-700 flex items-center gap-2"
+                                    >
+                                        <Edit className="h-4 w-4" />
+                                        Edit Supplier
+                                    </button>
+                                </Can>
                                 <button
                                     onClick={() => setShowModal(false)}
                                     className="rounded-lg border px-5 py-2.5 text-sm font-medium hover:bg-gray-50"
@@ -587,5 +616,13 @@ export default function SupplierInformationPage() {
                 </div>
             )}
         </div>
+    );
+}
+
+export default function SupplierInformationPage() {
+    return (
+        <PermissionGuard requiredPermission={PERMISSIONS.SUPPLIERS_VIEW}>
+            <SupplierInformationContent />
+        </PermissionGuard>
     );
 }

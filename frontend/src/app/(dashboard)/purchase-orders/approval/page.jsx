@@ -9,8 +9,11 @@ import {
     User, Calendar, Package, AlertTriangle,
     Check, X, ArrowRight, FileText, DollarSign
 } from "lucide-react";
+import { PermissionGuard } from "@/components/auth/PermissionGuard";
+import { Can } from "@/components/auth/Can";                     // ← ADDED
+import { PERMISSIONS } from "@/utils/permissions";
 
-export default function PurchaseOrderApprovalPage() {
+function PurchaseOrderApprovalContent() {
     const [purchaseOrders, setPurchaseOrders] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState("");
@@ -125,7 +128,6 @@ export default function PurchaseOrderApprovalPage() {
 
     const filteredPOs = purchaseOrders
         .filter(po => {
-            // Only show pending and approved for approval workflow
             if (filterStatus === "all") {
                 return po.status === "pending" || po.status === "approved";
             }
@@ -295,7 +297,7 @@ export default function PurchaseOrderApprovalPage() {
                         {filteredPOs.length === 0 ? (
                             <tr>
                                 <td colSpan="8" className="px-4 py-8 text-center text-gray-500">
-                                    {filterStatus === "pending" 
+                                    {filterStatus === "pending"
                                         ? "No pending purchase orders for approval."
                                         : "No purchase orders found."}
                                 </td>
@@ -322,8 +324,8 @@ export default function PurchaseOrderApprovalPage() {
                                                     {po.status || "—"}
                                                 </span>
                                                 {po.status === "rejected" && po.remarks && (
-                                                    <span 
-                                                        className="text-xs text-gray-400 ml-1 cursor-help" 
+                                                    <span
+                                                        className="text-xs text-gray-400 ml-1 cursor-help"
                                                         title={po.remarks}
                                                     >
                                                         (Reason: {po.remarks})
@@ -333,6 +335,7 @@ export default function PurchaseOrderApprovalPage() {
                                         </td>
                                         <td className="px-4 py-3">
                                             <div className="flex items-center justify-center gap-2">
+                                                {/* View — read-only */}
                                                 <button
                                                     onClick={() => handleViewPO(po)}
                                                     className="text-blue-600 hover:text-blue-800"
@@ -340,8 +343,10 @@ export default function PurchaseOrderApprovalPage() {
                                                 >
                                                     <Eye className="h-4 w-4" />
                                                 </button>
+
+                                                {/* RBAC: Approve/Reject require purchase_orders.approve */}
                                                 {po.status === "pending" && (
-                                                    <>
+                                                    <Can permission={PERMISSIONS.PURCHASE_ORDERS_APPROVE}>
                                                         <button
                                                             onClick={() => handleApprove(po.po_id)}
                                                             disabled={actionLoading}
@@ -358,7 +363,7 @@ export default function PurchaseOrderApprovalPage() {
                                                         >
                                                             <XCircle className="h-4 w-4" />
                                                         </button>
-                                                    </>
+                                                    </Can>
                                                 )}
                                             </div>
                                         </td>
@@ -397,7 +402,6 @@ export default function PurchaseOrderApprovalPage() {
                         </div>
 
                         <div className="p-6 space-y-4">
-                            {/* PO Info */}
                             <div className="grid grid-cols-2 gap-4">
                                 <div>
                                     <p className="text-xs font-medium uppercase text-gray-500">Supplier</p>
@@ -425,7 +429,6 @@ export default function PurchaseOrderApprovalPage() {
                                 )}
                             </div>
 
-                            {/* Items */}
                             <div className="border-t pt-4">
                                 <h3 className="text-sm font-semibold mb-2">PO Items</h3>
                                 <div className="overflow-hidden rounded-lg border">
@@ -470,7 +473,6 @@ export default function PurchaseOrderApprovalPage() {
                                 </div>
                             </div>
 
-                            {/* Actions */}
                             <div className="flex justify-end gap-3 border-t pt-4">
                                 <button
                                     onClick={() => setShowModal(false)}
@@ -478,8 +480,10 @@ export default function PurchaseOrderApprovalPage() {
                                 >
                                     Close
                                 </button>
+
+                                {/* RBAC: modal action buttons require purchase_orders.approve */}
                                 {selectedPO.status === "pending" && (
-                                    <>
+                                    <Can permission={PERMISSIONS.PURCHASE_ORDERS_APPROVE}>
                                         <button
                                             onClick={() => {
                                                 setShowModal(false);
@@ -500,7 +504,7 @@ export default function PurchaseOrderApprovalPage() {
                                             <CheckCircle className="h-4 w-4" />
                                             Approve
                                         </button>
-                                    </>
+                                    </Can>
                                 )}
                             </div>
                         </div>
@@ -575,5 +579,13 @@ export default function PurchaseOrderApprovalPage() {
                 </div>
             )}
         </div>
+    );
+}
+
+export default function PurchaseOrderApprovalPage() {
+    return (
+        <PermissionGuard requiredPermission={PERMISSIONS.PURCHASE_ORDERS_APPROVE}>
+            <PurchaseOrderApprovalContent />
+        </PermissionGuard>
     );
 }

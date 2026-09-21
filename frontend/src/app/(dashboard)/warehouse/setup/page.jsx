@@ -3,6 +3,9 @@
 import { useEffect, useState } from "react";
 import { getWarehouses, createWarehouse, updateWarehouse, deleteWarehouse } from "@/services/api";
 import { toast } from "react-hot-toast";
+import { PermissionGuard } from "@/components/auth/PermissionGuard";
+import { Can, CanAny } from "@/components/auth/Can";             // ← ADDED
+import { PERMISSIONS } from "@/utils/permissions";
 
 const initialForm = {
     warehouse_name: "",
@@ -11,7 +14,7 @@ const initialForm = {
     status: "active",
 };
 
-export default function WarehouseSetupPage() {
+function WarehouseSetupContent() {
     const [warehouses, setWarehouses] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState("");
@@ -127,12 +130,16 @@ export default function WarehouseSetupPage() {
                         Manage warehouses where inventory is stored.
                     </p>
                 </div>
-                <button
-                    onClick={() => handleOpenModal()}
-                    className="rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-blue-700"
-                >
-                    + Add Warehouse
-                </button>
+
+                {/* RBAC: only warehousing.create can add warehouses */}
+                <Can permission={PERMISSIONS.WAREHOUSING_CREATE}>
+                    <button
+                        onClick={() => handleOpenModal()}
+                        className="rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-blue-700"
+                    >
+                        + Add Warehouse
+                    </button>
+                </Can>
             </div>
 
             {/* Loading & Error */}
@@ -150,7 +157,14 @@ export default function WarehouseSetupPage() {
                                 <th className="px-4 py-3 text-left font-medium">Location</th>
                                 <th className="px-4 py-3 text-right font-medium">Capacity</th>
                                 <th className="px-4 py-3 text-left font-medium">Status</th>
-                                <th className="px-4 py-3 text-right font-medium">Actions</th>
+
+                                {/* RBAC: hide entire Actions column when user can't edit/delete */}
+                                <CanAny permissions={[
+                                    PERMISSIONS.WAREHOUSING_EDIT,
+                                    PERMISSIONS.WAREHOUSING_DELETE,
+                                ]}>
+                                    <th className="px-4 py-3 text-right font-medium">Actions</th>
+                                </CanAny>
                             </tr>
                         </thead>
                         <tbody className="divide-y">
@@ -169,27 +183,38 @@ export default function WarehouseSetupPage() {
                                         <td className="px-4 py-3 text-right">{wh.capacity || 0}</td>
                                         <td className="px-4 py-3">
                                             <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${
-                                                wh.status === "active" 
-                                                    ? "bg-green-100 text-green-800" 
+                                                wh.status === "active"
+                                                    ? "bg-green-100 text-green-800"
                                                     : "bg-gray-100 text-gray-800"
                                             }`}>
                                                 {wh.status}
                                             </span>
                                         </td>
-                                        <td className="px-4 py-3 text-right">
-                                            <button
-                                                onClick={() => handleOpenModal(wh)}
-                                                className="mr-2 text-blue-600 hover:text-blue-800"
-                                            >
-                                                Edit
-                                            </button>
-                                            <button
-                                                onClick={() => handleDelete(wh.warehouse_id)}
-                                                className="text-red-600 hover:text-red-800"
-                                            >
-                                                Delete
-                                            </button>
-                                        </td>
+
+                                        {/* RBAC: same wrapper keeps table column aligned */}
+                                        <CanAny permissions={[
+                                            PERMISSIONS.WAREHOUSING_EDIT,
+                                            PERMISSIONS.WAREHOUSING_DELETE,
+                                        ]}>
+                                            <td className="px-4 py-3 text-right">
+                                                <Can permission={PERMISSIONS.WAREHOUSING_EDIT}>
+                                                    <button
+                                                        onClick={() => handleOpenModal(wh)}
+                                                        className="mr-2 text-blue-600 hover:text-blue-800"
+                                                    >
+                                                        Edit
+                                                    </button>
+                                                </Can>
+                                                <Can permission={PERMISSIONS.WAREHOUSING_DELETE}>
+                                                    <button
+                                                        onClick={() => handleDelete(wh.warehouse_id)}
+                                                        className="text-red-600 hover:text-red-800"
+                                                    >
+                                                        Delete
+                                                    </button>
+                                                </Can>
+                                            </td>
+                                        </CanAny>
                                     </tr>
                                 ))
                             )}
@@ -298,5 +323,13 @@ export default function WarehouseSetupPage() {
                 </div>
             )}
         </div>
+    );
+}
+
+export default function WarehouseSetupPage() {
+    return (
+        <PermissionGuard requiredPermission={PERMISSIONS.WAREHOUSING_VIEW}>
+            <WarehouseSetupContent />
+        </PermissionGuard>
     );
 }

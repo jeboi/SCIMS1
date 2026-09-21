@@ -4,13 +4,16 @@ import { useEffect, useState } from "react";
 import axiosInstance from "@/lib/axios";
 import { toast } from "react-hot-toast";
 import BarcodeDisplay, { BarcodeOnly, QRCodeOnly } from "@/components/BarcodeDisplay";
+import { PermissionGuard } from "@/components/auth/PermissionGuard";
+import { Can } from "@/components/auth/Can";                     // ← ADDED
+import { PERMISSIONS } from "@/utils/permissions";
 import {
     Search, Barcode, QrCode, Package,
     Printer, Scan, Loader2, Copy,
     RefreshCw, CheckCircle, XCircle
 } from "lucide-react";
 
-export default function BarcodeManagementPage() {
+function BarcodeManagementContent() {
     const [items, setItems] = useState([]);
     const [categories, setCategories] = useState([]);
     const [loading, setLoading] = useState(true);
@@ -165,6 +168,7 @@ export default function BarcodeManagementPage() {
                         </p>
                     </div>
                     <div className="flex flex-wrap gap-2">
+                        {/* Scan mode is read-only — no gate */}
                         <button
                             onClick={() => setScanMode(!scanMode)}
                             className={`rounded-lg px-4 py-2.5 text-sm font-medium transition ${scanMode
@@ -175,13 +179,19 @@ export default function BarcodeManagementPage() {
                             <Scan className="inline h-4 w-4 mr-2" />
                             {scanMode ? "Scanning Mode" : "Scan Barcode"}
                         </button>
-                        <button
-                            onClick={handleOpenGenerateModal}
-                            className="rounded-lg bg-purple-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-purple-700"
-                        >
-                            <QrCode className="inline h-4 w-4 mr-2" />
-                            Generate Barcode
-                        </button>
+
+                        {/* RBAC: generating a new barcode is a create-prep action */}
+                        <Can permission={PERMISSIONS.WAREHOUSING_EDIT}>
+                            <button
+                                onClick={handleOpenGenerateModal}
+                                className="rounded-lg bg-purple-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-purple-700"
+                            >
+                                <QrCode className="inline h-4 w-4 mr-2" />
+                                Generate Barcode
+                            </button>
+                        </Can>
+
+                        {/* Refresh is read-only — no gate */}
                         <button
                             onClick={loadData}
                             className="rounded-lg border px-4 py-2.5 text-sm font-medium hover:bg-gray-50"
@@ -324,6 +334,7 @@ export default function BarcodeManagementPage() {
                                         </td>
                                         <td className="px-4 py-3 text-center">
                                             <div className="flex items-center justify-center gap-3">
+                                                {/* View barcode — read-only */}
                                                 <button
                                                     onClick={() => {
                                                         setSelectedItem(item);
@@ -334,6 +345,8 @@ export default function BarcodeManagementPage() {
                                                 >
                                                     <Barcode className="h-4 w-4" />
                                                 </button>
+
+                                                {/* View QR — read-only */}
                                                 <button
                                                     onClick={() => {
                                                         setSelectedItem(item);
@@ -344,16 +357,20 @@ export default function BarcodeManagementPage() {
                                                 >
                                                     <QrCode className="h-4 w-4" />
                                                 </button>
-                                                <button
-                                                    onClick={() => handleToggleStatus(item)}
-                                                    className={`${item.status === "active"
-                                                            ? "text-red-600 hover:text-red-800"
-                                                            : "text-green-600 hover:text-green-800"
-                                                        }`}
-                                                    title={item.status === "active" ? "Deactivate" : "Activate"}
-                                                >
-                                                    <RefreshCw className="h-4 w-4" />
-                                                </button>
+
+                                                {/* RBAC: toggle status is the only write on this page */}
+                                                <Can permission={PERMISSIONS.WAREHOUSING_EDIT}>
+                                                    <button
+                                                        onClick={() => handleToggleStatus(item)}
+                                                        className={`${item.status === "active"
+                                                                ? "text-red-600 hover:text-red-800"
+                                                                : "text-green-600 hover:text-green-800"
+                                                            }`}
+                                                        title={item.status === "active" ? "Deactivate" : "Activate"}
+                                                    >
+                                                        <RefreshCw className="h-4 w-4" />
+                                                    </button>
+                                                </Can>
                                             </div>
                                         </td>
                                     </tr>
@@ -567,5 +584,13 @@ export default function BarcodeManagementPage() {
                 </div>
             )}
         </>
+    );
+}
+
+export default function BarcodeManagementPage() {
+    return (
+        <PermissionGuard requiredPermission={PERMISSIONS.WAREHOUSING_VIEW}>
+            <BarcodeManagementContent />
+        </PermissionGuard>
     );
 }

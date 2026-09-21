@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { useAuth } from "@/hooks/useAuth";
+import { useAuth } from "@/context/AuthContext";
 import { Mail, Lock, Eye, EyeOff, Loader2, AlertCircle } from "lucide-react";
 import { toast } from "react-hot-toast";
 
@@ -11,7 +11,7 @@ import { csrf, login } from "@/services/api";
 
 export default function LoginForm() {
     const router = useRouter();
-    const { refreshUser } = useAuth();
+    const { clearAuthData } = useAuth();
 
     const [form, setForm] = useState({
         email: "",
@@ -33,27 +33,44 @@ export default function LoginForm() {
 
     const handleSubmit = async (e) => {
         e.preventDefault();
-
         setLoading(true);
         setError("");
 
         try {
-            await csrf();
-            await login(form);
-            await refreshUser();
+            // 1. Clear ALL previous auth state (localStorage, sessionStorage, cookies)
+            clearAuthData();
 
-            // Set welcome notification flag for the dashboard page
+            // 2. Get CSRF cookie
+            await csrf();
+
+            // 3. Login
+            const response = await login(form);
+
+            // 4. Save ONLY token, user, and permissions to localStorage
+            if (response?.token) {
+                localStorage.setItem("token", response.token);
+            }
+            if (response?.access_token) {
+                localStorage.setItem("access_token", response.access_token);
+            }
+            if (response?.user) {
+                localStorage.setItem("user", JSON.stringify(response.user));
+            }
+            if (response?.permissions) {
+                localStorage.setItem("permissions", JSON.stringify(response.permissions));
+            }
+
+            // 5. Set welcome toast flag
             sessionStorage.setItem("show_welcome_toast", "true");
 
-            router.replace("/dashboard");
+            // 6. HARD REDIRECT — forces full page reload with fresh state
+            window.location.href = "/dashboard";
         } catch (err) {
             console.error(err);
             const errorMessage =
                 err.response?.data?.message || "Invalid credentials. Please try again.";
-            
             setError(errorMessage);
             toast.error(errorMessage);
-        } finally {
             setLoading(false);
         }
     };

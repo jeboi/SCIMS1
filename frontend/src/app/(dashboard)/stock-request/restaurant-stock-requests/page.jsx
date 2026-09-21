@@ -1,5 +1,7 @@
 "use client";
 
+import { PermissionGuard } from "@/components/auth/PermissionGuard";
+import { PERMISSIONS } from "@/utils/permissions";
 import { useEffect, useState } from "react";
 import axiosInstance from "@/lib/axios";
 import { toast } from "react-hot-toast";
@@ -11,7 +13,7 @@ import {
     Send, Award, Zap, Building
 } from "lucide-react";
 
-export default function RestaurantStockRequestsPage() {
+function RestaurantStockRequestsContent() {
     const [requests, setRequests] = useState([]);
     const [items, setItems] = useState([]);
     const [departments, setDepartments] = useState([]);
@@ -695,5 +697,13 @@ export default function RestaurantStockRequestsPage() {
                 </div>
             )}
         </div>
+    );
+}
+
+export default function Page() {
+    return (
+        <PermissionGuard requiredPermission={PERMISSIONS.INVENTORY_VIEW}>
+            <RestaurantStockRequestsContent />
+        </PermissionGuard>
     );
 }

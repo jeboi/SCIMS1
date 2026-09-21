@@ -5,6 +5,8 @@ import Link from "next/link";
 import { FileText, Download, Loader2 } from "lucide-react";
 import { toast } from "react-hot-toast";
 import axiosInstance from "@/lib/axios";
+import { Can } from "@/components/auth/Can";                     // ← ADDED
+import { PERMISSIONS } from "@/utils/permissions";               // ← ADDED
 
 const reportGroups = [
     {
@@ -83,9 +85,8 @@ export default function ReportCards() {
                 return;
             }
 
-            // Generate CSV
             const headers = Object.keys(data[0]);
-            const rows = data.map(item => 
+            const rows = data.map(item =>
                 headers.map(header => {
                     let value = item[header];
                     if (typeof value === 'string' && value.includes(',')) {
@@ -100,7 +101,7 @@ export default function ReportCards() {
                     return value;
                 })
             );
-            
+
             let csv = headers.join(",") + "\n";
             rows.forEach(row => {
                 csv += row.join(",") + "\n";
@@ -135,22 +136,27 @@ export default function ReportCards() {
                     <ul className="space-y-2">
                         {group.reports.map((report) => (
                             <li key={report.name} className="flex items-center justify-between hover:bg-gray-50 px-2 py-1 rounded-lg transition">
+                                {/* Link is read-only navigation — no gate needed */}
                                 <Link href={report.href} className="text-sm text-gray-700 hover:text-blue-600 flex items-center gap-2">
                                     <FileText className="h-4 w-4 text-gray-400" />
                                     {report.name}
                                 </Link>
-                                <button
-                                    onClick={() => handleExport(report.name, report.endpoint, report.dataKey)}
-                                    disabled={exporting === report.name}
-                                    className="text-gray-400 hover:text-gray-600 disabled:opacity-50"
-                                    title="Export CSV"
-                                >
-                                    {exporting === report.name ? (
-                                        <Loader2 className="h-4 w-4 animate-spin" />
-                                    ) : (
-                                        <Download className="h-4 w-4" />
-                                    )}
-                                </button>
+
+                                {/* RBAC: exporting a report requires reports.export */}
+                                <Can permission={PERMISSIONS.REPORTS_EXPORT}>
+                                    <button
+                                        onClick={() => handleExport(report.name, report.endpoint, report.dataKey)}
+                                        disabled={exporting === report.name}
+                                        className="text-gray-400 hover:text-gray-600 disabled:opacity-50"
+                                        title="Export CSV"
+                                    >
+                                        {exporting === report.name ? (
+                                            <Loader2 className="h-4 w-4 animate-spin" />
+                                        ) : (
+                                            <Download className="h-4 w-4" />
+                                        )}
+                                    </button>
+                                </Can>
                             </li>
                         ))}
                     </ul>

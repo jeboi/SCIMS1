@@ -3,6 +3,9 @@
 import { useEffect, useState } from "react";
 import axiosInstance from "@/lib/axios";
 import { toast } from "react-hot-toast";
+import { PermissionGuard } from "@/components/auth/PermissionGuard";
+import { Can } from "@/components/auth/Can";                     // ← ADDED
+import { PERMISSIONS } from "@/utils/permissions";
 import {
     Package, AlertTriangle,
     Loader2,
@@ -16,7 +19,7 @@ import {
     LineChart as ReLineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer
 } from "recharts";
 
-export default function ForecastingPage() {
+function ForecastingContent() {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState("");
     const [items, setItems] = useState([]);
@@ -41,82 +44,82 @@ export default function ForecastingPage() {
     }, []);
 
     const loadData = async () => {
-    try {
-        setLoading(true);
-        setError("");
-        
-        const itemsRes = await axiosInstance.get("/items");
-        const transactionsRes = await axiosInstance.get("/inventory-transactions");
-        
-        let forecastRes = { data: { success: false } };
-        let seasonalRes = { data: { success: false } };
-        
         try {
-            forecastRes = await axiosInstance.post("/forecast", { days: 30 });
-        } catch (forecastErr) {
-            console.warn("⚠️ Forecast endpoint failed:", forecastErr.response?.data || forecastErr.message);
+            setLoading(true);
+            setError("");
+
+            const itemsRes = await axiosInstance.get("/items");
+            const transactionsRes = await axiosInstance.get("/inventory-transactions");
+
+            let forecastRes = { data: { success: false } };
+            let seasonalRes = { data: { success: false } };
+
+            try {
+                forecastRes = await axiosInstance.post("/forecast", { days: 30 });
+            } catch (forecastErr) {
+                console.warn("⚠️ Forecast endpoint failed:", forecastErr.response?.data || forecastErr.message);
+            }
+
+            try {
+                seasonalRes = await axiosInstance.post("/seasonal");
+            } catch (seasonalErr) {
+                console.warn("⚠️ Seasonal endpoint failed:", seasonalErr.response?.data || seasonalErr.message);
+            }
+
+            const itemsData = itemsRes.data?.data || [];
+            const transactionsData = transactionsRes.data?.data || [];
+
+            setItems(itemsData);
+            setTransactions(transactionsData);
+
+            generateForecast(itemsData, transactionsData);
+            generateSeasonalData(itemsData, transactionsData);
+            generateForecastProjection(itemsData, transactionsData);
+
+            if (forecastRes.data?.success && forecastRes.data?.data?.length > 0) {
+                setAiForecastResults(forecastRes.data.data);
+            } else {
+                setAiForecastResults([]);
+            }
+
+            if (seasonalRes.data?.success && seasonalRes.data?.data?.length > 0) {
+                setAiSeasonalData(seasonalRes.data.data);
+                console.log("✅ AI Seasonal Data:", seasonalRes.data);
+            } else {
+                setAiSeasonalData([]);
+            }
+
+            setLoading(false);
+
+        } catch (err) {
+            console.error("❌ Error loading data:", err);
+            setError(err.message || "Failed to load data.");
+            toast.error("Failed to load data.");
+            setLoading(false);
         }
-        
-        try {
-            seasonalRes = await axiosInstance.post("/seasonal");
-        } catch (seasonalErr) {
-            console.warn("⚠️ Seasonal endpoint failed:", seasonalErr.response?.data || seasonalErr.message);
-        }
-        
-        const itemsData = itemsRes.data?.data || [];
-        const transactionsData = transactionsRes.data?.data || [];
-        
-        setItems(itemsData);
-        setTransactions(transactionsData);
-        
-        generateForecast(itemsData, transactionsData);
-        generateSeasonalData(itemsData, transactionsData);
-        generateForecastProjection(itemsData, transactionsData);
-        
-        if (forecastRes.data?.success && forecastRes.data?.data?.length > 0) {
-            setAiForecastResults(forecastRes.data.data);
-        } else {
-            setAiForecastResults([]);
-        }
-        
-        if (seasonalRes.data?.success && seasonalRes.data?.data?.length > 0) {
-            setAiSeasonalData(seasonalRes.data.data);
-            console.log("✅ AI Seasonal Data:", seasonalRes.data);
-        } else {
-            setAiSeasonalData([]);
-        }
-        
-        setLoading(false);
-        
-    } catch (err) {
-        console.error("❌ Error loading data:", err);
-        setError(err.message || "Failed to load data.");
-        toast.error("Failed to load data.");
-        setLoading(false);
-    }
-};
+    };
 
     const generateForecast = (itemsData, transactionsData) => {
         const forecast = itemsData.map((item) => {
             const itemTransactions = transactionsData.filter(
-                tx => tx.item_id === item.item_id && 
-                (tx.transaction_type === "transfer_out" || 
+                tx => tx.item_id === item.item_id &&
+                (tx.transaction_type === "transfer_out" ||
                  tx.transaction_type === "issuing")
             );
-            
+
             const totalUsage = itemTransactions.reduce((sum, tx) => sum + Math.abs(tx.quantity), 0);
             const daysActive = 30;
             const avgDailyUsage = totalUsage / Math.max(daysActive, 1);
-            
-            const daysUntilOut = item.current_stock > 0 && avgDailyUsage > 0 
-                ? Math.floor(item.current_stock / avgDailyUsage) 
+
+            const daysUntilOut = item.current_stock > 0 && avgDailyUsage > 0
+                ? Math.floor(item.current_stock / avgDailyUsage)
                 : (item.current_stock > 0 ? Infinity : 0);
-            
+
             let status = "good";
             let statusLabel = "In Stock";
             let statusColor = "text-green-600";
             let statusBg = "bg-green-100";
-            
+
             if (item.current_stock <= 0) {
                 status = "critical";
                 statusLabel = "Out of Stock";
@@ -133,18 +136,18 @@ export default function ForecastingPage() {
                 statusColor = "text-orange-600";
                 statusBg = "bg-orange-100";
             }
-            
+
             let trend = "stable";
-            
+
             if (itemTransactions.length > 0) {
-                const sorted = [...itemTransactions].sort((a, b) => 
+                const sorted = [...itemTransactions].sort((a, b) =>
                     new Date(a.transaction_date) - new Date(b.transaction_date)
                 );
                 const recent = sorted.slice(-5);
                 if (recent.length >= 2) {
                     const firstTotal = recent.slice(0, 2).reduce((sum, tx) => sum + Math.abs(tx.quantity), 0);
                     const lastTotal = recent.slice(-2).reduce((sum, tx) => sum + Math.abs(tx.quantity), 0);
-                    
+
                     if (lastTotal > firstTotal * 1.2) {
                         trend = "increasing";
                     } else if (lastTotal < firstTotal * 0.8) {
@@ -152,10 +155,10 @@ export default function ForecastingPage() {
                     }
                 }
             }
-            
+
             let reorderRecommendation = "Not needed";
             let reorderUrgency = "low";
-            
+
             if (status === "critical" || item.current_stock <= 0) {
                 reorderRecommendation = "🚨 URGENT - Reorder Now";
                 reorderUrgency = "critical";
@@ -172,7 +175,7 @@ export default function ForecastingPage() {
                 reorderRecommendation = "✅ Stock is sufficient";
                 reorderUrgency = "low";
             }
-            
+
             return {
                 ...item,
                 totalUsage,
@@ -188,18 +191,18 @@ export default function ForecastingPage() {
                 transactionCount: itemTransactions.length,
             };
         });
-        
+
         const sorted = forecast.sort((a, b) => {
             const order = { critical: 0, warning: 1, good: 2 };
             return (order[a.status] || 3) - (order[b.status] || 3);
         });
-        
+
         setForecastData(sorted);
-        
+
         const criticalItems = forecast.filter(f => f.status === "critical");
         const warningItems = forecast.filter(f => f.status === "warning");
         const goodItems = forecast.filter(f => f.status === "good");
-        
+
         setAnalysis({
             totalItems: forecast.length,
             criticalItems: criticalItems.length,
@@ -221,24 +224,24 @@ export default function ForecastingPage() {
                 monthlyData[month] += Math.abs(tx.quantity);
             }
         });
-        
+
         const seasonal = Object.entries(monthlyData).map(([month, value]) => ({
             month,
             usage: value,
         }));
-        
+
         setSeasonalData(seasonal);
     };
 
     const generateForecastProjection = (itemsData, transactionsData) => {
         const projection = itemsData.map(item => {
             const itemTransactions = transactionsData.filter(
-                tx => tx.item_id === item.item_id && 
+                tx => tx.item_id === item.item_id &&
                 (tx.transaction_type === "transfer_out" || tx.transaction_type === "issuing")
             );
             const totalUsage = itemTransactions.reduce((sum, tx) => sum + Math.abs(tx.quantity), 0);
             const avgDailyUsage = totalUsage / 30;
-            
+
             let currentStock = item.current_stock || 0;
             let daysUntilOut = 30;
             for (let i = 1; i <= 30; i++) {
@@ -248,7 +251,7 @@ export default function ForecastingPage() {
                     break;
                 }
             }
-            
+
             return {
                 item_id: item.item_id,
                 item_name: item.item_name,
@@ -261,21 +264,21 @@ export default function ForecastingPage() {
 
     const getFilteredAIResults = () => {
         let data = [...aiForecastResults];
-        
+
         if (filterStatus !== "all") {
             data = data.filter(item => {
                 const forecastItem = forecastData.find(f => f.item_id === item.item_id);
                 return forecastItem?.status === filterStatus;
             });
         }
-        
+
         if (filterCategory !== "all") {
             data = data.filter(item => {
                 const forecastItem = forecastData.find(f => f.item_id === item.item_id);
                 return String(forecastItem?.category_id) === filterCategory;
             });
         }
-        
+
         data.sort((a, b) => {
             let aVal = a[sortBy] || 0;
             let bVal = b[sortBy] || 0;
@@ -286,7 +289,7 @@ export default function ForecastingPage() {
             }
             return sortOrder === "asc" ? aVal - bVal : bVal - aVal;
         });
-        
+
         return data;
     };
 
@@ -334,6 +337,7 @@ export default function ForecastingPage() {
                     </p>
                 </div>
                 <div className="flex flex-wrap gap-2">
+                    {/* Alerts toggle — read-only UI, no gate */}
                     <button
                         onClick={() => setShowAlerts(!showAlerts)}
                         className={`rounded-lg px-4 py-2.5 text-sm font-medium transition flex items-center gap-2 ${
@@ -348,13 +352,19 @@ export default function ForecastingPage() {
                             </span>
                         )}
                     </button>
-                    <button
-                        onClick={() => setShowExportModal(true)}
-                        className="rounded-lg border px-4 py-2.5 text-sm font-medium hover:bg-gray-50 flex items-center gap-2"
-                    >
-                        <FileDown className="h-4 w-4" />
-                        Export
-                    </button>
+
+                    {/* RBAC: exporting forecast data is a report export action */}
+                    <Can permission={PERMISSIONS.REPORTS_EXPORT}>
+                        <button
+                            onClick={() => setShowExportModal(true)}
+                            className="rounded-lg border px-4 py-2.5 text-sm font-medium hover:bg-gray-50 flex items-center gap-2"
+                        >
+                            <FileDown className="h-4 w-4" />
+                            Export
+                        </button>
+                    </Can>
+
+                    {/* Refresh — read-only */}
                     <button
                         onClick={loadData}
                         className="rounded-lg border px-4 py-2.5 text-sm font-medium hover:bg-gray-50 flex items-center gap-2"
@@ -407,79 +417,76 @@ export default function ForecastingPage() {
             )}
 
             {/* Filter & Sort Options */}
-<div className="flex flex-wrap items-center gap-3 bg-white rounded-lg border p-4">
-    <div className="flex items-center gap-2">
-        <Filter className="h-4 w-4 text-gray-400" />
-        <span className="text-sm font-medium">Filters:</span>
-    </div>
-    
-    {/* Status Filter */}
-    <select
-        value={filterStatus}
-        onChange={(e) => setFilterStatus(e.target.value)}
-        className="rounded-lg border px-3 py-1.5 text-sm"
-    >
-        <option value="all">All Status</option>
-        <option value="critical">Critical</option>
-        <option value="warning">Low Stock</option>
-        <option value="good">In Stock</option>
-    </select>
-    
-    {/* Category Filter - Fixed */}
-    <select
-        value={filterCategory}
-        onChange={(e) => setFilterCategory(e.target.value)}
-        className="rounded-lg border px-3 py-1.5 text-sm"
-    >
-        <option value="all">All Categories</option>
-        {(() => {
-            const uniqueCategories = items
-                .filter(item => item.category)
-                .reduce((acc, item) => {
-                    const existing = acc.find(c => c.category_id === item.category.category_id);
-                    if (!existing) {
-                        acc.push(item.category);
-                    }
-                    return acc;
-                }, []);
-            
-            return uniqueCategories.map((cat) => (
-                <option key={cat.category_id} value={String(cat.category_id)}>
-                    {cat.category_name}
-                </option>
-            ));
-        })()}
-    </select>
-    
-    {/* Sort Options */}
-    <select
-        value={sortBy}
-        onChange={(e) => setSortBy(e.target.value)}
-        className="rounded-lg border px-3 py-1.5 text-sm"
-    >
-        <option value="stock">Sort by Stock</option>
-        <option value="item_name">Sort by Name</option>
-        <option value="avgDailyUsage">Sort by Usage</option>
-        <option value="daysUntilOut">Sort by Days Until Out</option>
-    </select>
-    <button
-        onClick={() => setSortOrder(sortOrder === "asc" ? "desc" : "asc")}
-        className="rounded-lg border px-3 py-1.5 text-sm"
-    >
-        {sortOrder === "asc" ? "↑ Asc" : "↓ Desc"}
-    </button>
-    <button
-        onClick={() => {
-            setFilterStatus("all");
-            setFilterCategory("all");
-            setSortBy("stock");
-            setSortOrder("asc");
-        }}
-        className="text-sm text-red-500 hover:text-red-700"
-    >
-        Clear All
-    </button>
-</div>
+            <div className="flex flex-wrap items-center gap-3 bg-white rounded-lg border p-4">
+                <div className="flex items-center gap-2">
+                    <Filter className="h-4 w-4 text-gray-400" />
+                    <span className="text-sm font-medium">Filters:</span>
+                </div>
+
+                <select
+                    value={filterStatus}
+                    onChange={(e) => setFilterStatus(e.target.value)}
+                    className="rounded-lg border px-3 py-1.5 text-sm"
+                >
+                    <option value="all">All Status</option>
+                    <option value="critical">Critical</option>
+                    <option value="warning">Low Stock</option>
+                    <option value="good">In Stock</option>
+                </select>
+
+                <select
+                    value={filterCategory}
+                    onChange={(e) => setFilterCategory(e.target.value)}
+                    className="rounded-lg border px-3 py-1.5 text-sm"
+                >
+                    <option value="all">All Categories</option>
+                    {(() => {
+                        const uniqueCategories = items
+                            .filter(item => item.category)
+                            .reduce((acc, item) => {
+                                const existing = acc.find(c => c.category_id === item.category.category_id);
+                                if (!existing) {
+                                    acc.push(item.category);
+                                }
+                                return acc;
+                            }, []);
+
+                        return uniqueCategories.map((cat) => (
+                            <option key={cat.category_id} value={String(cat.category_id)}>
+                                {cat.category_name}
+                            </option>
+                        ));
+                    })()}
+                </select>
+
+                <select
+                    value={sortBy}
+                    onChange={(e) => setSortBy(e.target.value)}
+                    className="rounded-lg border px-3 py-1.5 text-sm"
+                >
+                    <option value="stock">Sort by Stock</option>
+                    <option value="item_name">Sort by Name</option>
+                    <option value="avgDailyUsage">Sort by Usage</option>
+                    <option value="daysUntilOut">Sort by Days Until Out</option>
+                </select>
+                <button
+                    onClick={() => setSortOrder(sortOrder === "asc" ? "desc" : "asc")}
+                    className="rounded-lg border px-3 py-1.5 text-sm"
+                >
+                    {sortOrder === "asc" ? "↑ Asc" : "↓ Desc"}
+                </button>
+                <button
+                    onClick={() => {
+                        setFilterStatus("all");
+                        setFilterCategory("all");
+                        setSortBy("stock");
+                        setSortOrder("asc");
+                    }}
+                    className="text-sm text-red-500 hover:text-red-700"
+                >
+                    Clear All
+                </button>
+            </div>
 
             {/* AI Forecast Results Section */}
             <div className="bg-gradient-to-r from-indigo-50 to-blue-50 rounded-lg border border-indigo-200 p-4">
@@ -532,7 +539,7 @@ export default function ForecastingPage() {
                                     {result.forecast && result.forecast.length > 0 && (
                                         <div className="mt-2">
                                             <div className="h-1 w-full bg-gray-200 rounded-full overflow-hidden">
-                                                <div 
+                                                <div
                                                     className="h-full bg-indigo-500 rounded-full"
                                                     style={{ width: `${Math.min((result.forecast.length / 30) * 100, 100)}%` }}
                                                 />
@@ -540,6 +547,7 @@ export default function ForecastingPage() {
                                             <p className="text-[10px] text-gray-400 mt-0.5">{result.forecast.length} days forecasted</p>
                                         </div>
                                     )}
+                                    {/* View Details — read-only modal */}
                                     <button
                                         onClick={() => {
                                             const item = forecastData.find(f => f.item_id === result.item_id);
@@ -561,70 +569,68 @@ export default function ForecastingPage() {
             </div>
 
             {/* AI Seasonal Trend Detection */}
-{(seasonalData.length > 0 || aiSeasonalData.length > 0) && (
-    <div className="bg-white rounded-lg border p-4">
-        <div className="flex items-center justify-between mb-2">
-            <h4 className="text-sm font-medium text-gray-700 flex items-center gap-2">
-                <Zap className="h-4 w-4 text-purple-600" />
-                AI-Powered Seasonal Usage Pattern
-                <span className="text-xs bg-purple-100 text-purple-700 px-2 py-0.5 rounded-full">AI Detected</span>
-            </h4>
-            {aiSeasonalData.length > 0 && (
-                <span className="text-xs text-gray-400">{aiSeasonalData.length} items analyzed</span>
-            )}
-        </div>
-        
-        {/* AI Seasonal Insights */}
-        {aiSeasonalData.length > 0 && (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 mb-4">
-                {aiSeasonalData.slice(0, 6).map((item) => (
-                    <div key={item.item_id} className="border rounded-lg p-3 bg-gray-50">
-                        <p className="font-medium text-sm">{item.item_name}</p>
-                        <div className="mt-1 flex flex-wrap gap-1">
-                            <span className={`text-xs px-2 py-0.5 rounded-full ${
-                                item.seasonal_strength === 'strong' ? 'bg-red-100 text-red-700' :
-                                item.seasonal_strength === 'moderate' ? 'bg-yellow-100 text-yellow-700' :
-                                'bg-green-100 text-green-700'
-                            }`}>
-                                {item.seasonal_strength} seasonality
-                            </span>
-                        </div>
-                        {item.peak_months.length > 0 && (
-                            <p className="text-xs text-gray-600 mt-1">
-                                📈 Peak: <strong>{item.peak_months.join(', ')}</strong>
-                            </p>
+            {(seasonalData.length > 0 || aiSeasonalData.length > 0) && (
+                <div className="bg-white rounded-lg border p-4">
+                    <div className="flex items-center justify-between mb-2">
+                        <h4 className="text-sm font-medium text-gray-700 flex items-center gap-2">
+                            <Zap className="h-4 w-4 text-purple-600" />
+                            AI-Powered Seasonal Usage Pattern
+                            <span className="text-xs bg-purple-100 text-purple-700 px-2 py-0.5 rounded-full">AI Detected</span>
+                        </h4>
+                        {aiSeasonalData.length > 0 && (
+                            <span className="text-xs text-gray-400">{aiSeasonalData.length} items analyzed</span>
                         )}
-                        {item.low_months.length > 0 && (
-                            <p className="text-xs text-gray-600">
-                                📉 Low: <strong>{item.low_months.join(', ')}</strong>
-                            </p>
-                        )}
-                        <p className="text-xs text-gray-500 mt-1">{item.recommendation}</p>
                     </div>
-                ))}
-            </div>
-        )}
-        
-        {/* Seasonal Chart (using existing seasonalData) */}
-        {seasonalData.length > 0 && (
-            <>
-                <div className="h-48">
-                    <ResponsiveContainer width="100%" height="100%">
-                        <ReLineChart data={seasonalData}>
-                            <CartesianGrid strokeDasharray="3 3" />
-                            <XAxis dataKey="month" />
-                            <YAxis />
-                            <Tooltip />
-                            <Legend />
-                            <Line type="monotone" dataKey="usage" stroke="#8b5cf6" strokeWidth={2} />
-                        </ReLineChart>
-                    </ResponsiveContainer>
+
+                    {aiSeasonalData.length > 0 && (
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 mb-4">
+                            {aiSeasonalData.slice(0, 6).map((item) => (
+                                <div key={item.item_id} className="border rounded-lg p-3 bg-gray-50">
+                                    <p className="font-medium text-sm">{item.item_name}</p>
+                                    <div className="mt-1 flex flex-wrap gap-1">
+                                        <span className={`text-xs px-2 py-0.5 rounded-full ${
+                                            item.seasonal_strength === 'strong' ? 'bg-red-100 text-red-700' :
+                                            item.seasonal_strength === 'moderate' ? 'bg-yellow-100 text-yellow-700' :
+                                            'bg-green-100 text-green-700'
+                                        }`}>
+                                            {item.seasonal_strength} seasonality
+                                        </span>
+                                    </div>
+                                    {item.peak_months.length > 0 && (
+                                        <p className="text-xs text-gray-600 mt-1">
+                                            📈 Peak: <strong>{item.peak_months.join(', ')}</strong>
+                                        </p>
+                                    )}
+                                    {item.low_months.length > 0 && (
+                                        <p className="text-xs text-gray-600">
+                                            📉 Low: <strong>{item.low_months.join(', ')}</strong>
+                                        </p>
+                                    )}
+                                    <p className="text-xs text-gray-500 mt-1">{item.recommendation}</p>
+                                </div>
+                            ))}
+                        </div>
+                    )}
+
+                    {seasonalData.length > 0 && (
+                        <>
+                            <div className="h-48">
+                                <ResponsiveContainer width="100%" height="100%">
+                                    <ReLineChart data={seasonalData}>
+                                        <CartesianGrid strokeDasharray="3 3" />
+                                        <XAxis dataKey="month" />
+                                        <YAxis />
+                                        <Tooltip />
+                                        <Legend />
+                                        <Line type="monotone" dataKey="usage" stroke="#8b5cf6" strokeWidth={2} />
+                                    </ReLineChart>
+                                </ResponsiveContainer>
+                            </div>
+                            <p className="text-xs text-gray-500 mt-2">Monthly usage pattern showing seasonal demand trends</p>
+                        </>
+                    )}
                 </div>
-                <p className="text-xs text-gray-500 mt-2">Monthly usage pattern showing seasonal demand trends</p>
-            </>
-        )}
-    </div>
-)}
+            )}
 
             {/* 30-Day Forecast Projection */}
             {forecastProjection.length > 0 && (
@@ -673,48 +679,52 @@ export default function ForecastingPage() {
                         <div className="p-6 space-y-4">
                             <p className="text-sm text-gray-500">Export forecast data in the following formats:</p>
                             <div className="grid grid-cols-2 gap-3">
-                                <button
-                                    onClick={() => {
-                                        const headers = ["Item", "Stock", "Reorder Level", "Daily Usage", "Days Until Out", "Status", "Trend", "Recommendation"];
-                                        
-                                        const rows = forecastData.map(item => {
-                                            const aiResult = aiForecastResults.find(r => r.item_id === item.item_id);
-                                            return [
-                                                `"${item.item_name || ""}"`,
-                                                item.current_stock || 0,
-                                                item.reorder_level || 0,
-                                                item.avgDailyUsage || 0,
-                                                item.daysUntilOut,
-                                                `"${item.statusLabel || ""}"`,
-                                                `"${aiResult?.trend || item.trend || "stable"}"`,
-                                                `"${aiResult?.recommendation || item.reorderRecommendation || "Not needed"}"`,
-                                            ];
-                                        });
-                                        
-                                        let csv = headers.join(",") + "\n";
-                                        rows.forEach(row => {
-                                            csv += row.join(",") + "\n";
-                                        });
-                                        
-                                        const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-                                        const url = window.URL.createObjectURL(blob);
-                                        const a = document.createElement('a');
-                                        a.href = url;
-                                        a.download = `forecast_report_${new Date().toISOString().slice(0,10)}.csv`;
-                                        document.body.appendChild(a);
-                                        a.click();
-                                        document.body.removeChild(a);
-                                        window.URL.revokeObjectURL(url);
-                                        
-                                        toast.success("CSV exported successfully!");
-                                        setShowExportModal(false);
-                                    }}
-                                    className="flex items-center justify-center gap-2 p-3 border rounded-lg hover:bg-gray-50 transition"
-                                >
-                                    <FileDown className="h-5 w-5" />
-                                    CSV
-                                </button>
-                                
+                                {/* RBAC: CSV export requires reports.export (defense in depth — modal already gated) */}
+                                <Can permission={PERMISSIONS.REPORTS_EXPORT}>
+                                    <button
+                                        onClick={() => {
+                                            const headers = ["Item", "Stock", "Reorder Level", "Daily Usage", "Days Until Out", "Status", "Trend", "Recommendation"];
+
+                                            const rows = forecastData.map(item => {
+                                                const aiResult = aiForecastResults.find(r => r.item_id === item.item_id);
+                                                return [
+                                                    `"${item.item_name || ""}"`,
+                                                    item.current_stock || 0,
+                                                    item.reorder_level || 0,
+                                                    item.avgDailyUsage || 0,
+                                                    item.daysUntilOut,
+                                                    `"${item.statusLabel || ""}"`,
+                                                    `"${aiResult?.trend || item.trend || "stable"}"`,
+                                                    `"${aiResult?.recommendation || item.reorderRecommendation || "Not needed"}"`,
+                                                ];
+                                            });
+
+                                            let csv = headers.join(",") + "\n";
+                                            rows.forEach(row => {
+                                                csv += row.join(",") + "\n";
+                                            });
+
+                                            const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+                                            const url = window.URL.createObjectURL(blob);
+                                            const a = document.createElement('a');
+                                            a.href = url;
+                                            a.download = `forecast_report_${new Date().toISOString().slice(0,10)}.csv`;
+                                            document.body.appendChild(a);
+                                            a.click();
+                                            document.body.removeChild(a);
+                                            window.URL.revokeObjectURL(url);
+
+                                            toast.success("CSV exported successfully!");
+                                            setShowExportModal(false);
+                                        }}
+                                        className="flex items-center justify-center gap-2 p-3 border rounded-lg hover:bg-gray-50 transition"
+                                    >
+                                        <FileDown className="h-5 w-5" />
+                                        CSV
+                                    </button>
+                                </Can>
+
+                                {/* Print — read-only */}
                                 <button
                                     onClick={() => {
                                         const table = document.querySelector('.forecast-table-print') || document.querySelector('table');
@@ -722,15 +732,15 @@ export default function ForecastingPage() {
                                             toast.error("No table found to print.");
                                             return;
                                         }
-                                        
+
                                         const printWindow = window.open('', '_blank', 'width=1000,height=800');
                                         if (!printWindow) {
                                             toast.error("Please allow popups for this site.");
                                             return;
                                         }
-                                        
+
                                         const date = new Date().toLocaleString();
-                                        
+
                                         printWindow.document.write(`
                                             <!DOCTYPE html>
                                             <html>
@@ -771,7 +781,7 @@ export default function ForecastingPage() {
                                             </html>
                                         `);
                                         printWindow.document.close();
-                                        
+
                                         setShowExportModal(false);
                                     }}
                                     className="flex items-center justify-center gap-2 p-3 border rounded-lg hover:bg-gray-50 transition"
@@ -780,7 +790,7 @@ export default function ForecastingPage() {
                                     Print / PDF
                                 </button>
                             </div>
-                            
+
                             <div className="flex justify-end border-t pt-4">
                                 <button
                                     onClick={() => setShowExportModal(false)}
@@ -870,16 +880,21 @@ export default function ForecastingPage() {
                             </div>
 
                             <div className="grid grid-cols-2 gap-3">
-                                <button
-                                    onClick={() => {
-                                        setShowDetailModal(false);
-                                        window.location.href = "/procurement/purchase-requests";
-                                    }}
-                                    className="flex items-center justify-center gap-2 p-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
-                                >
-                                    <ShoppingCart className="h-4 w-4" />
-                                    Create Purchase Request
-                                </button>
+                                {/* RBAC: creating a PO from forecast requires procurement.create */}
+                                <Can permission={PERMISSIONS.PROCUREMENT_CREATE}>
+                                    <button
+                                        onClick={() => {
+                                            setShowDetailModal(false);
+                                            window.location.href = "/procurement/purchase-requests";
+                                        }}
+                                        className="flex items-center justify-center gap-2 p-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 w-full"
+                                    >
+                                        <ShoppingCart className="h-4 w-4" />
+                                        Create Purchase Request
+                                    </button>
+                                </Can>
+
+                                {/* Send Alert — currently just a toast, no backend call */}
                                 <button
                                     onClick={() => {
                                         toast.success("Alert sent to procurement team!");
@@ -908,5 +923,13 @@ export default function ForecastingPage() {
                 </div>
             )}
         </div>
+    );
+}
+
+export default function ForecastingPage() {
+    return (
+        <PermissionGuard requiredPermission={PERMISSIONS.INVENTORY_VIEW}>
+            <ForecastingContent />
+        </PermissionGuard>
     );
 }

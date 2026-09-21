@@ -4,8 +4,10 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import axiosInstance from "@/lib/axios";
 import { toast } from "react-hot-toast";
+import { PermissionGuard } from "@/components/auth/PermissionGuard";
+import { PERMISSIONS } from "@/utils/permissions";
 
-export default function PurchaseOrderCreationPage() {
+function PurchaseOrderCreationContent() {
     const router = useRouter();
 
     // Data state
@@ -475,5 +477,13 @@ const handleSubmit = async (e) => {
                 </div>
             </form>
         </div>
+    );
+}
+
+export default function PurchaseOrderCreationPage() {
+    return (
+        <PermissionGuard requiredPermission={PERMISSIONS.PURCHASE_ORDERS_CREATE}>
+            <PurchaseOrderCreationContent />
+        </PermissionGuard>
     );
 }

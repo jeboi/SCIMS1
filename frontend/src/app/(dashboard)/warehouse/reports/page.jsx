@@ -3,6 +3,9 @@
 import { useEffect, useState } from "react";
 import axiosInstance from "@/lib/axios";
 import { toast } from "react-hot-toast";
+import { PermissionGuard } from "@/components/auth/PermissionGuard";
+import { Can } from "@/components/auth/Can";                     // ← ADDED
+import { PERMISSIONS } from "@/utils/permissions";
 import {
     Warehouse, MapPin, Package, Boxes,
     TrendingUp, TrendingDown, Minus, RefreshCw,
@@ -17,7 +20,7 @@ import {
     LineChart, Line
 } from "recharts";
 
-export default function WarehouseReportsPage() {
+function WarehouseReportsContent() {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState("");
     const [warehouses, setWarehouses] = useState([]);
@@ -34,26 +37,26 @@ export default function WarehouseReportsPage() {
         try {
             setLoading(true);
             setError("");
-            
+
             const [warehousesRes, locationsRes, itemsRes, transactionsRes] = await Promise.all([
                 axiosInstance.get("/warehouses"),
                 axiosInstance.get("/storage-locations"),
                 axiosInstance.get("/items"),
                 axiosInstance.get("/inventory-transactions"),
             ]);
-            
+
             const warehousesData = warehousesRes.data?.data || [];
             const locationsData = locationsRes.data?.data || [];
             const itemsData = itemsRes.data?.data || [];
             const transactionsData = transactionsRes.data?.data || [];
-            
+
             setWarehouses(warehousesData);
             setStorageLocations(locationsData);
             setItems(itemsData);
             setTransactions(transactionsData);
-            
+
             generateReport(warehousesData, locationsData, itemsData, transactionsData);
-            
+
         } catch (err) {
             console.error(err);
             setError("Failed to load report data.");
@@ -64,25 +67,21 @@ export default function WarehouseReportsPage() {
     };
 
     const generateReport = (warehousesData, locationsData, itemsData, transactionsData) => {
-        // 1. Summary Stats
         const totalWarehouses = warehousesData.length;
         const totalLocations = locationsData.length;
         const totalCapacity = warehousesData.reduce((sum, w) => sum + (w.capacity || 0), 0);
-        
-        // 2. Warehouse Usage
+
         const warehouseUsage = warehousesData.map(wh => {
             const locationCount = locationsData.filter(l => l.warehouse_id === wh.warehouse_id).length;
             const activeLocations = locationsData.filter(l => l.warehouse_id === wh.warehouse_id && l.status === "active").length;
-            
-            // Get item count from transactions (distinct items in this warehouse)
+
             const warehouseTransactions = transactionsData.filter(tx => tx.warehouse_id === wh.warehouse_id);
             const uniqueItems = new Set(warehouseTransactions.map(tx => tx.item_id)).size;
-            
-            // Calculate utilization
-            const utilization = wh.capacity > 0 
+
+            const utilization = wh.capacity > 0
                 ? Math.round((warehouseTransactions.reduce((sum, tx) => sum + Math.abs(tx.quantity), 0) / wh.capacity) * 100)
                 : 0;
-            
+
             return {
                 ...wh,
                 locationCount,
@@ -92,21 +91,18 @@ export default function WarehouseReportsPage() {
                 utilization: Math.min(utilization, 100),
             };
         });
-        
-        // 3. Location Status Distribution
+
         const locationStatusData = [
             { name: "Active", value: locationsData.filter(l => l.status === "active").length, color: "#22c55e" },
             { name: "Inactive", value: locationsData.filter(l => l.status === "inactive").length, color: "#ef4444" },
         ];
-        
-        // 4. Location Distribution by Warehouse
+
         const locationDistribution = warehousesData.map(wh => ({
             name: wh.warehouse_name.length > 15 ? wh.warehouse_name.slice(0, 15) + "..." : wh.warehouse_name,
             locations: locationsData.filter(l => l.warehouse_id === wh.warehouse_id).length,
             capacity: wh.capacity || 0,
         }));
-        
-        // 5. Warehouse Capacity Utilization Chart
+
         const capacityData = warehousesData.map(wh => {
             const locs = locationsData.filter(l => l.warehouse_id === wh.warehouse_id);
             const usedCapacity = locs.reduce((sum, l) => sum + (l.capacity || 0), 0);
@@ -116,8 +112,7 @@ export default function WarehouseReportsPage() {
                 used: usedCapacity,
             };
         });
-        
-        // 6. Items per Warehouse
+
         const itemsPerWarehouse = warehousesData.map(wh => {
             const whTransactions = transactionsData.filter(tx => tx.warehouse_id === wh.warehouse_id);
             const uniqueItems = new Set(whTransactions.map(tx => tx.item_id)).size;
@@ -128,18 +123,17 @@ export default function WarehouseReportsPage() {
                 quantity: totalQty,
             };
         });
-        
-        // 7. Warehouse Health Score
+
         const warehouseHealth = warehousesData.map(wh => {
             const locs = locationsData.filter(l => l.warehouse_id === wh.warehouse_id);
             const activeLocs = locs.filter(l => l.status === "active").length;
             const totalLocs = locs.length;
             const locHealth = totalLocs > 0 ? Math.round((activeLocs / totalLocs) * 100) : 0;
-            
+
             const whTransactions = transactionsData.filter(tx => tx.warehouse_id === wh.warehouse_id);
             const uniqueItems = new Set(whTransactions.map(tx => tx.item_id)).size;
             const itemHealth = uniqueItems > 0 ? Math.min(Math.round((uniqueItems / itemsData.length) * 100), 100) : 0;
-            
+
             return {
                 name: wh.warehouse_name,
                 locationHealth: locHealth,
@@ -150,7 +144,7 @@ export default function WarehouseReportsPage() {
                 uniqueItems: uniqueItems,
             };
         });
-        
+
         setReportData({
             summary: {
                 totalWarehouses,
@@ -173,7 +167,7 @@ export default function WarehouseReportsPage() {
 
     const handleExportCSV = () => {
         if (!reportData) return;
-        
+
         const headers = ["Warehouse", "Locations", "Active", "Items", "Stock", "Utilization"];
         const rows = reportData.warehouseUsage.map(wh => [
             `"${wh.warehouse_name}"`,
@@ -183,12 +177,12 @@ export default function WarehouseReportsPage() {
             wh.totalStock,
             `${wh.utilization}%`,
         ]);
-        
+
         let csv = headers.join(",") + "\n";
         rows.forEach(row => {
             csv += row.join(",") + "\n";
         });
-        
+
         const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
         const url = window.URL.createObjectURL(blob);
         const a = document.createElement('a');
@@ -239,6 +233,7 @@ export default function WarehouseReportsPage() {
                     </p>
                 </div>
                 <div className="flex flex-wrap gap-2">
+                    {/* Refresh — read-only, no gate */}
                     <button
                         onClick={loadData}
                         className="rounded-lg border px-4 py-2.5 text-sm font-medium hover:bg-gray-50 flex items-center gap-2"
@@ -246,13 +241,19 @@ export default function WarehouseReportsPage() {
                         <RefreshCw className="h-4 w-4" />
                         Refresh
                     </button>
-                    <button
-                        onClick={handleExportCSV}
-                        className="rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-blue-700 flex items-center gap-2"
-                    >
-                        <FileDown className="h-4 w-4" />
-                        Export CSV
-                    </button>
+
+                    {/* RBAC: only reports.export can export */}
+                    <Can permission={PERMISSIONS.REPORTS_EXPORT}>
+                        <button
+                            onClick={handleExportCSV}
+                            className="rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-blue-700 flex items-center gap-2"
+                        >
+                            <FileDown className="h-4 w-4" />
+                            Export CSV
+                        </button>
+                    </Can>
+
+                    {/* Print — read-only (browser print), no gate */}
                     <button
                         onClick={() => {
                             const printWindow = window.open('', '_blank', 'width=1200,height=800');
@@ -377,7 +378,7 @@ export default function WarehouseReportsPage() {
                                         <td className="px-4 py-2 text-center">
                                             <div className="flex items-center justify-center gap-2">
                                                 <div className="h-2 w-20 bg-gray-200 rounded-full overflow-hidden">
-                                                    <div 
+                                                    <div
                                                         className={`h-full rounded-full ${
                                                             wh.utilization > 80 ? 'bg-red-500' :
                                                             wh.utilization > 50 ? 'bg-yellow-500' :
@@ -408,7 +409,6 @@ export default function WarehouseReportsPage() {
 
             {/* Charts */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                {/* Location Status Distribution */}
                 <div className="bg-white rounded-lg border p-4">
                     <h3 className="text-sm font-semibold mb-2">Location Status</h3>
                     <div className="h-64">
@@ -434,7 +434,6 @@ export default function WarehouseReportsPage() {
                     </div>
                 </div>
 
-                {/* Locations per Warehouse */}
                 <div className="bg-white rounded-lg border p-4">
                     <h3 className="text-sm font-semibold mb-2">Locations per Warehouse</h3>
                     <div className="h-64">
@@ -451,7 +450,6 @@ export default function WarehouseReportsPage() {
                     </div>
                 </div>
 
-                {/* Items per Warehouse */}
                 <div className="bg-white rounded-lg border p-4">
                     <h3 className="text-sm font-semibold mb-2">Items per Warehouse</h3>
                     <div className="h-64">
@@ -467,7 +465,6 @@ export default function WarehouseReportsPage() {
                     </div>
                 </div>
 
-                {/* Warehouse Health */}
                 <div className="bg-white rounded-lg border p-4">
                     <h3 className="text-sm font-semibold mb-2">Warehouse Health Score</h3>
                     <div className="h-64">
@@ -484,5 +481,13 @@ export default function WarehouseReportsPage() {
                 </div>
             </div>
         </div>
+    );
+}
+
+export default function WarehouseReportsPage() {
+    return (
+        <PermissionGuard requiredPermission={PERMISSIONS.REPORTS_VIEW}>
+            <WarehouseReportsContent />
+        </PermissionGuard>
     );
 }

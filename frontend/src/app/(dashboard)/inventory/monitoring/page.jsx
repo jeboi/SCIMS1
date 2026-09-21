@@ -4,8 +4,10 @@ import { useEffect, useState } from "react";
 import axiosInstance from "@/lib/axios";
 import { toast } from "react-hot-toast";
 import { Search, AlertTriangle, Package, Filter, X, Loader2 } from "lucide-react";
+import { PermissionGuard } from "@/components/auth/PermissionGuard";
+import { PERMISSIONS } from "@/utils/permissions";
 
-export default function InventoryMonitoringPage() {
+function InventoryMonitoringContent() {
     const [items, setItems] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState("");
@@ -327,5 +329,13 @@ export default function InventoryMonitoringPage() {
                 </div>
             )}
         </div>
+    );
+}
+
+export default function InventoryMonitoringPage() {
+    return (
+        <PermissionGuard requiredPermission={PERMISSIONS.INVENTORY_VIEW}>
+            <InventoryMonitoringContent />
+        </PermissionGuard>
     );
 }

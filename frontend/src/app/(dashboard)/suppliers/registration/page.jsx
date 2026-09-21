@@ -8,8 +8,10 @@ import {
     Building, User, Phone, Mail, MapPin, 
     Star, Loader2, ArrowLeft, CheckCircle
 } from "lucide-react";
+import { PermissionGuard } from "@/components/auth/PermissionGuard";
+import { PERMISSIONS } from "@/utils/permissions";
 
-export default function SupplierRegistrationPage() {
+function SupplierRegistrationContent() {
     const router = useRouter();
     const [loading, setLoading] = useState(false);
     const [form, setForm] = useState({
@@ -346,5 +348,13 @@ export default function SupplierRegistrationPage() {
                 </button>
             </div>
         </div>
+    );
+}
+
+export default function SupplierRegistrationPage() {
+    return (
+        <PermissionGuard requiredPermission={PERMISSIONS.SUPPLIERS_CREATE}>
+            <SupplierRegistrationContent />
+        </PermissionGuard>
     );
 }

@@ -9,8 +9,10 @@ import {
     Calendar, Package, FileText, DollarSign,
     TrendingUp, Award, Truck
 } from "lucide-react";
+import { PermissionGuard } from "@/components/auth/PermissionGuard";
+import { PERMISSIONS } from "@/utils/permissions";
 
-export default function PurchaseOrderTrackingPage() {
+function PurchaseOrderTrackingContent() {
     const [purchaseOrders, setPurchaseOrders] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState("");
@@ -401,5 +403,13 @@ export default function PurchaseOrderTrackingPage() {
                 </div>
             )}
         </div>
+    );
+}
+
+export default function PurchaseOrderTrackingPage() {
+    return (
+        <PermissionGuard requiredPermission={PERMISSIONS.PURCHASE_ORDERS_VIEW}>
+            <PurchaseOrderTrackingContent />
+        </PermissionGuard>
     );
 }

@@ -10,13 +10,16 @@ import {
     Eye, Download, Printer, AlertTriangle,
     TrendingUp, Award, Zap, Shield, Edit
 } from "lucide-react";
+import { PermissionGuard } from "@/components/auth/PermissionGuard";
+import { Can } from "@/components/auth/Can";                     // ← ADDED
+import { PERMISSIONS } from "@/utils/permissions";
 
 import {
     BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
     PieChart, Pie, Cell
 } from "recharts";
 
-export default function AuditTrailPage() {
+function AuditTrailContent() {
     const [logs, setLogs] = useState([]);
     const [summary, setSummary] = useState(null);
     const [modules, setModules] = useState([]);
@@ -29,7 +32,6 @@ export default function AuditTrailPage() {
     const [dateRange, setDateRange] = useState({ from: "", to: "" });
     const [pagination, setPagination] = useState({ current_page: 1, last_page: 1, per_page: 50, total: 0 });
 
-    // Demo data for when the table doesn't exist
     const getDemoLogs = () => {
         const now = new Date();
         return [
@@ -137,19 +139,19 @@ export default function AuditTrailPage() {
         try {
             setLoading(true);
             setError("");
-            
+
             const params = {
                 page: page,
                 per_page: 50,
             };
-            
+
             if (filterModule !== "all") params.module = filterModule;
             if (filterAction !== "all") params.action = filterAction;
             if (dateRange.from) params.from_date = dateRange.from;
             if (dateRange.to) params.to_date = dateRange.to;
-            
+
             const response = await axiosInstance.get("/audit-logs", { params });
-            
+
             setLogs(response.data?.data || []);
             setPagination(response.data?.pagination || { current_page: 1, last_page: 1, per_page: 50, total: 0 });
         } catch (err) {
@@ -172,25 +174,23 @@ export default function AuditTrailPage() {
     };
 
     const loadFilters = async () => {
-    try {
-        const [modulesRes, actionsRes] = await Promise.all([
-            axiosInstance.get("/audit-logs/modules"),
-            axiosInstance.get("/audit-logs/actions"),
-        ]);
-        
-        const modulesData = modulesRes.data?.data || [];
-        const actionsData = actionsRes.data?.data || [];
-        
-        // If API returns empty, use fallback
-        setModules(modulesData.length > 0 ? modulesData : ["inventory", "warehouse", "procurement", "purchase_order", "supplier", "logistics", "user"]);
-        setActions(actionsData.length > 0 ? actionsData : ["create", "update", "delete", "login", "logout", "view", "approve", "reject"]);
-    } catch (err) {
-        // Fallback data when API fails
-        console.log("Audit filters not available, using demo data");
-        setModules(["inventory", "warehouse", "procurement", "purchase_order", "supplier", "logistics", "user"]);
-        setActions(["create", "update", "delete", "login", "logout", "view", "approve", "reject"]);
-    }
-};
+        try {
+            const [modulesRes, actionsRes] = await Promise.all([
+                axiosInstance.get("/audit-logs/modules"),
+                axiosInstance.get("/audit-logs/actions"),
+            ]);
+
+            const modulesData = modulesRes.data?.data || [];
+            const actionsData = actionsRes.data?.data || [];
+
+            setModules(modulesData.length > 0 ? modulesData : ["inventory", "warehouse", "procurement", "purchase_order", "supplier", "logistics", "user"]);
+            setActions(actionsData.length > 0 ? actionsData : ["create", "update", "delete", "login", "logout", "view", "approve", "reject"]);
+        } catch (err) {
+            console.log("Audit filters not available, using demo data");
+            setModules(["inventory", "warehouse", "procurement", "purchase_order", "supplier", "logistics", "user"]);
+            setActions(["create", "update", "delete", "login", "logout", "view", "approve", "reject"]);
+        }
+    };
 
     const getActionBadge = (action) => {
         const colors = {
@@ -256,6 +256,7 @@ export default function AuditTrailPage() {
                     </p>
                 </div>
                 <div className="flex flex-wrap gap-2">
+                    {/* Refresh — read-only */}
                     <button
                         onClick={() => {
                             loadData(1);
@@ -266,36 +267,42 @@ export default function AuditTrailPage() {
                         <RefreshCw className="h-4 w-4" />
                         Refresh
                     </button>
-                    <button
-                        onClick={() => {
-                            const headers = ["User", "Action", "Module", "Description", "Date"];
-                            const rows = filteredLogs.map(log => [
-                                `"${log.user_name || "—"}"`,
-                                `"${log.action || "—"}"`,
-                                `"${log.module || "—"}"`,
-                                `"${log.description || "—"}"`,
-                                `"${log.created_at ? new Date(log.created_at).toLocaleString() : "—"}"`,
-                            ]);
-                            let csv = headers.join(",") + "\n";
-                            rows.forEach(row => {
-                                csv += row.join(",") + "\n";
-                            });
-                            const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-                            const url = window.URL.createObjectURL(blob);
-                            const a = document.createElement('a');
-                            a.href = url;
-                            a.download = `audit_report_${new Date().toISOString().slice(0,10)}.csv`;
-                            document.body.appendChild(a);
-                            a.click();
-                            document.body.removeChild(a);
-                            window.URL.revokeObjectURL(url);
-                            toast.success("CSV exported successfully!");
-                        }}
-                        className="rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-blue-700 flex items-center gap-2"
-                    >
-                        <Download className="h-4 w-4" />
-                        Export CSV
-                    </button>
+
+                    {/* RBAC: only reports.export can export */}
+                    <Can permission={PERMISSIONS.REPORTS_EXPORT}>
+                        <button
+                            onClick={() => {
+                                const headers = ["User", "Action", "Module", "Description", "Date"];
+                                const rows = filteredLogs.map(log => [
+                                    `"${log.user_name || "—"}"`,
+                                    `"${log.action || "—"}"`,
+                                    `"${log.module || "—"}"`,
+                                    `"${log.description || "—"}"`,
+                                    `"${log.created_at ? new Date(log.created_at).toLocaleString() : "—"}"`,
+                                ]);
+                                let csv = headers.join(",") + "\n";
+                                rows.forEach(row => {
+                                    csv += row.join(",") + "\n";
+                                });
+                                const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+                                const url = window.URL.createObjectURL(blob);
+                                const a = document.createElement('a');
+                                a.href = url;
+                                a.download = `audit_report_${new Date().toISOString().slice(0,10)}.csv`;
+                                document.body.appendChild(a);
+                                a.click();
+                                document.body.removeChild(a);
+                                window.URL.revokeObjectURL(url);
+                                toast.success("CSV exported successfully!");
+                            }}
+                            className="rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-blue-700 flex items-center gap-2"
+                        >
+                            <Download className="h-4 w-4" />
+                            Export CSV
+                        </button>
+                    </Can>
+
+                    {/* Print — read-only */}
                     <button
                         onClick={() => {
                             const printWindow = window.open('', '_blank', 'width=1200,height=800');
@@ -377,7 +384,6 @@ export default function AuditTrailPage() {
 
             {/* Charts */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 audit-print">
-                {/* Actions by Type - Pie Chart */}
                 <div className="bg-white rounded-lg border p-4">
                     <h3 className="text-sm font-semibold mb-2">Actions by Type</h3>
                     {summaryData.by_action && summaryData.by_action.length > 0 ? (
@@ -410,7 +416,6 @@ export default function AuditTrailPage() {
                     )}
                 </div>
 
-                {/* Activities by Module - Bar Chart */}
                 <div className="bg-white rounded-lg border p-4">
                     <h3 className="text-sm font-semibold mb-2">Activities by Module</h3>
                     {summaryData.by_module && summaryData.by_module.length > 0 ? (
@@ -578,5 +583,13 @@ export default function AuditTrailPage() {
                 </div>
             )}
         </div>
+    );
+}
+
+export default function AuditTrailPage() {
+    return (
+        <PermissionGuard requiredPermission={PERMISSIONS.REPORTS_VIEW}>
+            <AuditTrailContent />
+        </PermissionGuard>
     );
 }

@@ -5,6 +5,9 @@ import { toast } from "react-hot-toast";
 import { useAuth } from "@/context/AuthContext";
 import axiosInstance from "@/lib/axios";
 import { getPurchaseOrders } from "@/services/api";
+import { PermissionGuard } from "@/components/auth/PermissionGuard";
+import { Can } from "@/components/auth/Can";                     // ← ADDED
+import { PERMISSIONS } from "@/utils/permissions";
 
 const initialForm = {
     po_id: "",
@@ -14,7 +17,7 @@ const initialForm = {
     remarks: "",
 };
 
-export default function GoodsReceivingPage() {
+function GoodsReceivingContent() {
     const { user } = useAuth();
     const [purchaseOrders, setPurchaseOrders] = useState([]);
     const [warehouses, setWarehouses] = useState([]);
@@ -36,8 +39,7 @@ export default function GoodsReceivingPage() {
         try {
             setLoading(true);
             setError("");
-            
-            // Fetch warehouses, pending POs, items, and receiving records
+
             const [warehousesRes, posRes, itemsRes, receivingRes] = await Promise.all([
                 axiosInstance.get("/warehouses"),
                 axiosInstance.get("/purchase-orders"),
@@ -46,13 +48,7 @@ export default function GoodsReceivingPage() {
             ]);
 
             setWarehouses(warehousesRes.data?.data || []);
-            
-            // Filter POs with status 'approved' or 'pending' (not yet fully received)
-            const allPOs = posRes.data?.data || [];
-            // You can filter to only show POs that haven't been fully received
-            // For now, show all POs
-            setPurchaseOrders(allPOs);
-            
+            setPurchaseOrders(posRes.data?.data || []);
             setItems(itemsRes.data?.data || []);
             setReceivingRecords(receivingRes.data?.data || []);
         } catch (err) {
@@ -75,7 +71,7 @@ export default function GoodsReceivingPage() {
     const handlePOChange = (e) => {
         const poId = e.target.value;
         setForm((prev) => ({ ...prev, po_id: poId }));
-        
+
         if (poId) {
             const po = purchaseOrders.find(p => p.po_id === parseInt(poId));
             setSelectedPO(po);
@@ -100,43 +96,43 @@ export default function GoodsReceivingPage() {
     };
 
     const handleAddManualItem = () => {
-    if (!selectedItemForManual) {
-        toast.error("Please select an item.");
-        return;
-    }
-    if (manualQuantity <= 0) {
-        toast.error("Quantity must be greater than 0.");
-        return;
-    }
+        if (!selectedItemForManual) {
+            toast.error("Please select an item.");
+            return;
+        }
+        if (manualQuantity <= 0) {
+            toast.error("Quantity must be greater than 0.");
+            return;
+        }
 
-    const existing = poItems.find(item => item.item_id === selectedItemForManual.item_id);
-    if (existing) {
-        toast.error("Item already added. Edit the quantity in the table.");
-        return;
-    }
+        const existing = poItems.find(item => item.item_id === selectedItemForManual.item_id);
+        if (existing) {
+            toast.error("Item already added. Edit the quantity in the table.");
+            return;
+        }
 
-    setPoItems([
-        ...poItems,
-        {
-            item_id: selectedItemForManual.item_id,
-            item_name: selectedItemForManual.item_name,
-            quantity: 0, // Not from PO
-            quantity_received: manualQuantity,
-            is_manual: true,
-        },
-    ]);
+        setPoItems([
+            ...poItems,
+            {
+                item_id: selectedItemForManual.item_id,
+                item_name: selectedItemForManual.item_name,
+                quantity: 0,
+                quantity_received: manualQuantity,
+                is_manual: true,
+            },
+        ]);
 
-    setSelectedItemForManual(null);
-    setManualQuantity(1);
-    setShowItemSelector(false);
-    toast.success("Item added.");
-};
+        setSelectedItemForManual(null);
+        setManualQuantity(1);
+        setShowItemSelector(false);
+        toast.success("Item added.");
+    };
 
-const handleRemoveItem = (index) => {
-    const updated = [...poItems];
-    updated.splice(index, 1);
-    setPoItems(updated);
-};
+    const handleRemoveItem = (index) => {
+        const updated = [...poItems];
+        updated.splice(index, 1);
+        setPoItems(updated);
+    };
 
     const handleOpenModal = () => {
         setForm({
@@ -157,92 +153,86 @@ const handleRemoveItem = (index) => {
         setPoItems([]);
     };
 
-const handleSubmit = async (e) => {
-    e.preventDefault();
+    const handleSubmit = async (e) => {
+        e.preventDefault();
 
-    if (!form.warehouse_id) {
-        toast.error("Please select a warehouse.");
-        return;
-    }
+        if (!form.warehouse_id) {
+            toast.error("Please select a warehouse.");
+            return;
+        }
 
-    if (!form.received_by.trim()) {
-        toast.error("Received by is required.");
-        return;
-    }
+        if (!form.received_by.trim()) {
+            toast.error("Received by is required.");
+            return;
+        }
 
-    if (!form.received_date) {
-        toast.error("Received date is required.");
-        return;
-    }
+        if (!form.received_date) {
+            toast.error("Received date is required.");
+            return;
+        }
 
-    if (poItems.length === 0) {
-        toast.error("Please add at least one item.");
-        return;
-    }
+        if (poItems.length === 0) {
+            toast.error("Please add at least one item.");
+            return;
+        }
 
-    const hasItems = poItems.some(item => item.quantity_received > 0);
-    if (!hasItems) {
-        toast.error("Please enter quantity for at least one item.");
-        return;
-    }
+        const hasItems = poItems.some(item => item.quantity_received > 0);
+        if (!hasItems) {
+            toast.error("Please enter quantity for at least one item.");
+            return;
+        }
 
-    try {
-        setSaving(true);
+        try {
+            setSaving(true);
 
-        // 1. Create Delivery
-        const deliveryPayload = {
-            po_id: form.po_id || null,
-            tracking_number: `DEL-${Date.now()}`,
-            vehicle: "N/A",
-            delivery_date: form.received_date,
-            status: "delivered",
-        };
+            const deliveryPayload = {
+                po_id: form.po_id || null,
+                tracking_number: `DEL-${Date.now()}`,
+                vehicle: "N/A",
+                delivery_date: form.received_date,
+                status: "delivered",
+            };
 
-        const deliveryRes = await axiosInstance.post("/deliveries", deliveryPayload);
-        const delivery = deliveryRes.data?.data;
-        const deliveryId = delivery.delivery_id;
+            const deliveryRes = await axiosInstance.post("/deliveries", deliveryPayload);
+            const delivery = deliveryRes.data?.data;
+            const deliveryId = delivery.delivery_id;
 
-        // 2. Create Receiving Record (BEFORE delivery items)
-        const receivingPayload = {
-            delivery_id: deliveryId,
-            warehouse_id: form.warehouse_id,
-            received_by: form.received_by.trim(),
-            received_date: form.received_date,
-            remarks: form.remarks.trim() || null,
-        };
+            const receivingPayload = {
+                delivery_id: deliveryId,
+                warehouse_id: form.warehouse_id,
+                received_by: form.received_by.trim(),
+                received_date: form.received_date,
+                remarks: form.remarks.trim() || null,
+            };
 
-        await axiosInstance.post("/receiving-records", receivingPayload);
+            await axiosInstance.post("/receiving-records", receivingPayload);
 
-        // 3. Create Delivery Items
-        const deliveryItemsPromises = poItems
-            .filter(item => item.quantity_received > 0)
-            .map(item => {
-                return axiosInstance.post("/delivery-items", {
-                    delivery_id: deliveryId,
-                    item_id: item.item_id,
-                    quantity_received: item.quantity_received,
+            const deliveryItemsPromises = poItems
+                .filter(item => item.quantity_received > 0)
+                .map(item => {
+                    return axiosInstance.post("/delivery-items", {
+                        delivery_id: deliveryId,
+                        item_id: item.item_id,
+                        quantity_received: item.quantity_received,
+                    });
                 });
-            });
 
-        await Promise.all(deliveryItemsPromises);
+            await Promise.all(deliveryItemsPromises);
 
-        // Note: Inventory transactions are handled automatically by the DeliveryItemController,
-        // so we don't need to create them separately.
-
-        toast.success("Goods received successfully!");
-        setShowModal(false);
-        setForm(initialForm);
-        setSelectedPO(null);
-        setPoItems([]);
-        fetchData();
-    } catch (err) {
-        console.error(err);
-        const msg = err.response?.data?.message || "Failed to receive goods.";
-        toast.error(msg);
-    } finally {
-        setSaving(false);
-    }
-};
+            toast.success("Goods received successfully!");
+            setShowModal(false);
+            setForm(initialForm);
+            setSelectedPO(null);
+            setPoItems([]);
+            fetchData();
+        } catch (err) {
+            console.error(err);
+            const msg = err.response?.data?.message || "Failed to receive goods.";
+            toast.error(msg);
+        } finally {
+            setSaving(false);
+        }
+    };
 
     const getStatusBadge = (status) => {
         const colors = {
@@ -263,12 +253,16 @@ const handleSubmit = async (e) => {
                         Receive items into the warehouse.
                     </p>
                 </div>
-                <button
-                    onClick={handleOpenModal}
-                    className="rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-blue-700"
-                >
-                    + Receive Goods
-                </button>
+
+                {/* RBAC: only warehousing.create can receive goods */}
+                <Can permission={PERMISSIONS.WAREHOUSING_CREATE}>
+                    <button
+                        onClick={handleOpenModal}
+                        className="rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-blue-700"
+                    >
+                        + Receive Goods
+                    </button>
+                </Can>
             </div>
 
             {/* Table */}
@@ -323,7 +317,6 @@ const handleSubmit = async (e) => {
                     onMouseDown={(e) => e.target === e.currentTarget && handleCloseModal()}
                 >
                     <div className="w-full max-w-3xl max-h-[90vh] rounded-xl bg-white shadow-xl flex flex-col">
-                        {/* Header */}
                         <div className="flex items-center justify-between border-b px-6 py-4 shrink-0">
                             <h2 className="text-lg font-semibold">Receive Goods</h2>
                             <button
@@ -335,7 +328,6 @@ const handleSubmit = async (e) => {
                             </button>
                         </div>
 
-                        {/* Body */}
                         <form onSubmit={handleSubmit} className="overflow-y-auto p-6 space-y-5 hide-scrollbar">
                             {/* Purchase Order Selection */}
                             <div>
@@ -360,134 +352,132 @@ const handleSubmit = async (e) => {
                                 </p>
                             </div>
 
-{/* Items */}
-<div>
-    <div className="flex items-center justify-between mb-1">
-        <label className="block text-sm font-medium text-gray-700">
-            Items Received
-        </label>
-        {!form.po_id && (
-            <button
-                type="button"
-                onClick={() => setShowItemSelector(!showItemSelector)}
-                className="text-xs text-blue-600 hover:text-blue-800"
-            >
-                + Add Item Manually
-            </button>
-        )}
-    </div>
+                            {/* Items */}
+                            <div>
+                                <div className="flex items-center justify-between mb-1">
+                                    <label className="block text-sm font-medium text-gray-700">
+                                        Items Received
+                                    </label>
+                                    {!form.po_id && (
+                                        <button
+                                            type="button"
+                                            onClick={() => setShowItemSelector(!showItemSelector)}
+                                            className="text-xs text-blue-600 hover:text-blue-800"
+                                        >
+                                            + Add Item Manually
+                                        </button>
+                                    )}
+                                </div>
 
-    {/* Manual Item Selector */}
-    {showItemSelector && (
-        <div className="mb-3 p-3 border rounded bg-gray-50 flex flex-wrap items-end gap-3">
-            <div className="flex-1 min-w-[150px]">
-                <label className="block text-xs text-gray-600">Select Item</label>
-                <select
-                    value={selectedItemForManual?.item_id || ""}
-                    onChange={(e) => {
-                        const item = items.find(i => i.item_id === parseInt(e.target.value));
-                        setSelectedItemForManual(item);
-                    }}
-                    className="w-full rounded border px-3 py-1.5 text-sm"
-                >
-                    <option value="">Choose item...</option>
-                    {items.map((item) => (
-                        <option key={item.item_id} value={item.item_id}>
-                            {item.item_name} (Stock: {item.current_stock || 0})
-                        </option>
-                    ))}
-                </select>
-            </div>
-            <div className="w-24">
-                <label className="block text-xs text-gray-600">Qty</label>
-                <input
-                    type="number"
-                    min="1"
-                    value={manualQuantity}
-                    onChange={(e) => setManualQuantity(parseInt(e.target.value) || 1)}
-                    className="w-full rounded border px-2 py-1.5 text-sm"
-                />
-            </div>
-            <button
-                type="button"
-                onClick={handleAddManualItem}
-                className="px-3 py-1.5 bg-blue-600 text-white text-sm rounded hover:bg-blue-700"
-            >
-                Add
-            </button>
-            <button
-                type="button"
-                onClick={() => {
-                    setShowItemSelector(false);
-                    setSelectedItemForManual(null);
-                    setManualQuantity(1);
-                }}
-                className="px-3 py-1.5 text-sm text-gray-500 hover:text-gray-700"
-            >
-                Cancel
-            </button>
-        </div>
-    )}
-
-    {poItems.length === 0 ? (
-        <div className="text-sm text-gray-400 border rounded p-4 text-center">
-            {form.po_id ? "No items found for this PO." : "Select a PO to auto-fill items, or click 'Add Item Manually'."}
-        </div>
-    ) : (
-        <div className="border rounded overflow-hidden">
-            <table className="min-w-full text-sm">
-                <thead className="bg-gray-50">
-                    <tr>
-                        <th className="px-3 py-2 text-left text-xs font-medium">Item</th>
-                        {form.po_id && (
-                            <th className="px-3 py-2 text-right text-xs font-medium">PO Qty</th>
-                        )}
-                        <th className="px-3 py-2 text-right text-xs font-medium">Received</th>
-                        <th className="px-3 py-2 text-center text-xs font-medium">Action</th>
-                    </tr>
-                </thead>
-                <tbody className="divide-y">
-                    {poItems.map((item, index) => (
-                        <tr key={item.item_id || index}>
-                            <td className="px-3 py-2 text-sm">
-                                {item.item_name || "Unknown Item"}
-                                {item.is_manual && (
-                                    <span className="ml-2 text-xs text-gray-400">(Manual)</span>
+                                {showItemSelector && (
+                                    <div className="mb-3 p-3 border rounded bg-gray-50 flex flex-wrap items-end gap-3">
+                                        <div className="flex-1 min-w-[150px]">
+                                            <label className="block text-xs text-gray-600">Select Item</label>
+                                            <select
+                                                value={selectedItemForManual?.item_id || ""}
+                                                onChange={(e) => {
+                                                    const item = items.find(i => i.item_id === parseInt(e.target.value));
+                                                    setSelectedItemForManual(item);
+                                                }}
+                                                className="w-full rounded border px-3 py-1.5 text-sm"
+                                            >
+                                                <option value="">Choose item...</option>
+                                                {items.map((item) => (
+                                                    <option key={item.item_id} value={item.item_id}>
+                                                        {item.item_name} (Stock: {item.current_stock || 0})
+                                                    </option>
+                                                ))}
+                                            </select>
+                                        </div>
+                                        <div className="w-24">
+                                            <label className="block text-xs text-gray-600">Qty</label>
+                                            <input
+                                                type="number"
+                                                min="1"
+                                                value={manualQuantity}
+                                                onChange={(e) => setManualQuantity(parseInt(e.target.value) || 1)}
+                                                className="w-full rounded border px-2 py-1.5 text-sm"
+                                            />
+                                        </div>
+                                        <button
+                                            type="button"
+                                            onClick={handleAddManualItem}
+                                            className="px-3 py-1.5 bg-blue-600 text-white text-sm rounded hover:bg-blue-700"
+                                        >
+                                            Add
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={() => {
+                                                setShowItemSelector(false);
+                                                setSelectedItemForManual(null);
+                                                setManualQuantity(1);
+                                            }}
+                                            className="px-3 py-1.5 text-sm text-gray-500 hover:text-gray-700"
+                                        >
+                                            Cancel
+                                        </button>
+                                    </div>
                                 )}
-                            </td>
-                            {form.po_id && (
-                                <td className="px-3 py-2 text-right text-sm">
-                                    {item.quantity || 0}
-                                </td>
-                            )}
-                            <td className="px-3 py-2 text-right">
-                                <input
-                                    type="number"
-                                    min="0"
-                                    max={item.quantity || 9999}
-                                    value={item.quantity_received}
-                                    onChange={(e) => handleItemQuantityChange(index, e.target.value)}
-                                    className="w-20 rounded border px-2 py-1 text-sm text-right"
-                                />
-                            </td>
-                            <td className="px-3 py-2 text-center">
-                                <button
-                                    type="button"
-                                    onClick={() => handleRemoveItem(index)}
-                                    className="text-red-500 hover:text-red-700 text-xs"
-                                >
-                                    Remove
-                                </button>
-                            </td>
-                        </tr>
-                    ))}
-                </tbody>
-            </table>
-        </div>
-    )}
-</div>
 
-                            {/* Warehouse */}
+                                {poItems.length === 0 ? (
+                                    <div className="text-sm text-gray-400 border rounded p-4 text-center">
+                                        {form.po_id ? "No items found for this PO." : "Select a PO to auto-fill items, or click 'Add Item Manually'."}
+                                    </div>
+                                ) : (
+                                    <div className="border rounded overflow-hidden">
+                                        <table className="min-w-full text-sm">
+                                            <thead className="bg-gray-50">
+                                                <tr>
+                                                    <th className="px-3 py-2 text-left text-xs font-medium">Item</th>
+                                                    {form.po_id && (
+                                                        <th className="px-3 py-2 text-right text-xs font-medium">PO Qty</th>
+                                                    )}
+                                                    <th className="px-3 py-2 text-right text-xs font-medium">Received</th>
+                                                    <th className="px-3 py-2 text-center text-xs font-medium">Action</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody className="divide-y">
+                                                {poItems.map((item, index) => (
+                                                    <tr key={item.item_id || index}>
+                                                        <td className="px-3 py-2 text-sm">
+                                                            {item.item_name || "Unknown Item"}
+                                                            {item.is_manual && (
+                                                                <span className="ml-2 text-xs text-gray-400">(Manual)</span>
+                                                            )}
+                                                        </td>
+                                                        {form.po_id && (
+                                                            <td className="px-3 py-2 text-right text-sm">
+                                                                {item.quantity || 0}
+                                                            </td>
+                                                        )}
+                                                        <td className="px-3 py-2 text-right">
+                                                            <input
+                                                                type="number"
+                                                                min="0"
+                                                                max={item.quantity || 9999}
+                                                                value={item.quantity_received}
+                                                                onChange={(e) => handleItemQuantityChange(index, e.target.value)}
+                                                                className="w-20 rounded border px-2 py-1 text-sm text-right"
+                                                            />
+                                                        </td>
+                                                        <td className="px-3 py-2 text-center">
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => handleRemoveItem(index)}
+                                                                className="text-red-500 hover:text-red-700 text-xs"
+                                                            >
+                                                                Remove
+                                                            </button>
+                                                        </td>
+                                                    </tr>
+                                                ))}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                )}
+                            </div>
+
                             <div>
                                 <label className="mb-1 block text-sm font-medium text-gray-700">
                                     Warehouse *
@@ -508,7 +498,6 @@ const handleSubmit = async (e) => {
                                 </select>
                             </div>
 
-                            {/* Received By */}
                             <div>
                                 <label className="mb-1 block text-sm font-medium text-gray-700">
                                     Received By *
@@ -523,7 +512,6 @@ const handleSubmit = async (e) => {
                                 />
                             </div>
 
-                            {/* Date */}
                             <div>
                                 <label className="mb-1 block text-sm font-medium text-gray-700">
                                     Received Date *
@@ -538,7 +526,6 @@ const handleSubmit = async (e) => {
                                 />
                             </div>
 
-                            {/* Remarks */}
                             <div>
                                 <label className="mb-1 block text-sm font-medium text-gray-700">
                                     Remarks
@@ -553,7 +540,6 @@ const handleSubmit = async (e) => {
                                 />
                             </div>
 
-                            {/* Actions */}
                             <div className="flex justify-end gap-3 border-t pt-4">
                                 <button
                                     type="button"
@@ -576,5 +562,13 @@ const handleSubmit = async (e) => {
                 </div>
             )}
         </div>
+    );
+}
+
+export default function GoodsReceivingPage() {
+    return (
+        <PermissionGuard requiredPermission={PERMISSIONS.WAREHOUSING_VIEW}>
+            <GoodsReceivingContent />
+        </PermissionGuard>
     );
 }

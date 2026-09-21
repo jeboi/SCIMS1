@@ -2,8 +2,11 @@
 
 import { useEffect, useState } from "react";
 import axiosInstance from "@/lib/axios";
+import { PermissionGuard } from "@/components/auth/PermissionGuard";
+import { Can, CanAny } from "@/components/auth/Can";             // ← ADDED
+import { PERMISSIONS } from "@/utils/permissions";
 
-export default function Page() {
+function SupplierSourcingContent() {
     const [suppliers, setSuppliers] = useState([]);
     const [quotations, setQuotations] = useState([]);
 
@@ -171,7 +174,7 @@ export default function Page() {
         }
     };
 
-        const handleEditSupplier = (supplier) => {
+    const handleEditSupplier = (supplier) => {
         setEditingSupplier(supplier);
 
         setSupplierForm({
@@ -198,74 +201,74 @@ export default function Page() {
     };
 
     const handleUpdateSupplier = async (event) => {
-    event.preventDefault();
+        event.preventDefault();
 
-    setError("");
-    setSuccess("");
+        setError("");
+        setSuccess("");
 
-    if (!editingSupplier) {
-        return;
-    }
-
-    if (!supplierForm.supplier_name.trim()) {
-        setError("Supplier name is required.");
-        return;
-    }
-
-    try {
-        setSubmitting(true);
-
-        const body = {
-            supplier_name: supplierForm.supplier_name.trim(),
-            contact_person:
-                supplierForm.contact_person.trim() || null,
-            phone: supplierForm.phone.trim() || null,
-            email: supplierForm.email.trim() || null,
-            address: supplierForm.address.trim() || null,
-            status: supplierForm.status,
-            rating:
-                supplierForm.rating === ""
-                    ? null
-                    : Number(supplierForm.rating),
-        };
-
-        await axiosInstance.put(
-            `/suppliers/${editingSupplier.supplier_id}`,
-            body
-        );
-
-        setSuccess("Supplier updated successfully.");
-
-        resetSupplierForm();
-        setEditingSupplier(null);
-        setShowEditSupplierForm(false);
-
-        await loadData();
-    } catch (error) {
-        console.error(
-            "Failed to update supplier:",
-            error
-        );
-
-        if (error.response?.data?.errors) {
-            const messages = Object.values(
-                error.response.data.errors
-            )
-                .flat()
-                .join(" ");
-
-            setError(messages);
-        } else if (error.response?.data?.message) {
-            setError(error.response.data.message);
-        } else {
-            setError(
-                "Unable to update supplier. Please check the API connection."
-            );
+        if (!editingSupplier) {
+            return;
         }
-    } finally {
-        setSubmitting(false);
-    }
-};
+
+        if (!supplierForm.supplier_name.trim()) {
+            setError("Supplier name is required.");
+            return;
+        }
+
+        try {
+            setSubmitting(true);
+
+            const body = {
+                supplier_name: supplierForm.supplier_name.trim(),
+                contact_person:
+                    supplierForm.contact_person.trim() || null,
+                phone: supplierForm.phone.trim() || null,
+                email: supplierForm.email.trim() || null,
+                address: supplierForm.address.trim() || null,
+                status: supplierForm.status,
+                rating:
+                    supplierForm.rating === ""
+                        ? null
+                        : Number(supplierForm.rating),
+            };
+
+            await axiosInstance.put(
+                `/suppliers/${editingSupplier.supplier_id}`,
+                body
+            );
+
+            setSuccess("Supplier updated successfully.");
+
+            resetSupplierForm();
+            setEditingSupplier(null);
+            setShowEditSupplierForm(false);
+
+            await loadData();
+        } catch (error) {
+            console.error(
+                "Failed to update supplier:",
+                error
+            );
+
+            if (error.response?.data?.errors) {
+                const messages = Object.values(
+                    error.response.data.errors
+                )
+                    .flat()
+                    .join(" ");
+
+                setError(messages);
+            } else if (error.response?.data?.message) {
+                setError(error.response.data.message);
+            } else {
+                setError(
+                    "Unable to update supplier. Please check the API connection."
+                );
+            }
+        } finally {
+            setSubmitting(false);
+        }
+    };
 
     const handleCreateQuotation = async (event) => {
         event.preventDefault();
@@ -342,143 +345,143 @@ export default function Page() {
     };
 
     const handleEditQuotation = (quotation) => {
-    setEditingQuotation(quotation);
+        setEditingQuotation(quotation);
 
-    setQuotationForm({
-        supplier_id: quotation.supplier_id || "",
-        quotation_no: quotation.quotation_no || "",
-        quotation_date: quotation.quotation_date
-            ? quotation.quotation_date.substring(0, 10)
-            : "",
-        status: quotation.status || "pending",
-    });
+        setQuotationForm({
+            supplier_id: quotation.supplier_id || "",
+            quotation_no: quotation.quotation_no || "",
+            quotation_date: quotation.quotation_date
+                ? quotation.quotation_date.substring(0, 10)
+                : "",
+            status: quotation.status || "pending",
+        });
 
-    setShowEditQuotationForm(true);
-    setShowQuotationForm(false);
-    setShowSupplierForm(false);
-    setShowEditSupplierForm(false);
+        setShowEditQuotationForm(true);
+        setShowQuotationForm(false);
+        setShowSupplierForm(false);
+        setShowEditSupplierForm(false);
 
-    setSelectedSupplier(null);
-    setError("");
-    setSuccess("");
-};
+        setSelectedSupplier(null);
+        setError("");
+        setSuccess("");
+    };
 
-const handleUpdateQuotation = async (event) => {
-    event.preventDefault();
+    const handleUpdateQuotation = async (event) => {
+        event.preventDefault();
 
-    setError("");
-    setSuccess("");
-
-    if (!editingQuotation) {
-        return;
-    }
-
-    if (!quotationForm.supplier_id) {
-        setError("Please select a supplier.");
-        return;
-    }
-
-    if (!quotationForm.quotation_no.trim()) {
-        setError("Quotation number is required.");
-        return;
-    }
-
-    if (!quotationForm.quotation_date) {
-        setError("Quotation date is required.");
-        return;
-    }
-
-    try {
-        setSubmitting(true);
-
-        const body = {
-            supplier_id: Number(
-                quotationForm.supplier_id
-            ),
-            quotation_no:
-                quotationForm.quotation_no.trim(),
-            quotation_date:
-                quotationForm.quotation_date,
-            status: quotationForm.status,
-        };
-
-        await axiosInstance.put(
-            `/supplier-quotations/${editingQuotation.quotation_id}`,
-            body
-        );
-
-        setSuccess(
-            "Supplier quotation updated successfully."
-        );
-
-        resetQuotationForm();
-        setEditingQuotation(null);
-        setShowEditQuotationForm(false);
-
-        await loadData();
-    } catch (error) {
-        console.error(
-            "Failed to update supplier quotation:",
-            error
-        );
-
-        if (error.response?.data?.errors) {
-            const messages = Object.values(
-                error.response.data.errors
-            )
-                .flat()
-                .join(" ");
-
-            setError(messages);
-        } else if (error.response?.data?.message) {
-            setError(error.response.data.message);
-        } else {
-            setError(
-                "Unable to update supplier quotation. Please check the API connection."
-            );
-        }
-    } finally {
-        setSubmitting(false);
-    }
-};
-
-const handleDeleteQuotation = async (quotationId) => {
-    const confirmed = window.confirm(
-        "Are you sure you want to delete this supplier quotation?"
-    );
-
-    if (!confirmed) {
-        return;
-    }
-
-    try {
         setError("");
         setSuccess("");
 
-        await axiosInstance.delete(
-            `/supplier-quotations/${quotationId}`
+        if (!editingQuotation) {
+            return;
+        }
+
+        if (!quotationForm.supplier_id) {
+            setError("Please select a supplier.");
+            return;
+        }
+
+        if (!quotationForm.quotation_no.trim()) {
+            setError("Quotation number is required.");
+            return;
+        }
+
+        if (!quotationForm.quotation_date) {
+            setError("Quotation date is required.");
+            return;
+        }
+
+        try {
+            setSubmitting(true);
+
+            const body = {
+                supplier_id: Number(
+                    quotationForm.supplier_id
+                ),
+                quotation_no:
+                    quotationForm.quotation_no.trim(),
+                quotation_date:
+                    quotationForm.quotation_date,
+                status: quotationForm.status,
+            };
+
+            await axiosInstance.put(
+                `/supplier-quotations/${editingQuotation.quotation_id}`,
+                body
+            );
+
+            setSuccess(
+                "Supplier quotation updated successfully."
+            );
+
+            resetQuotationForm();
+            setEditingQuotation(null);
+            setShowEditQuotationForm(false);
+
+            await loadData();
+        } catch (error) {
+            console.error(
+                "Failed to update supplier quotation:",
+                error
+            );
+
+            if (error.response?.data?.errors) {
+                const messages = Object.values(
+                    error.response.data.errors
+                )
+                    .flat()
+                    .join(" ");
+
+                setError(messages);
+            } else if (error.response?.data?.message) {
+                setError(error.response.data.message);
+            } else {
+                setError(
+                    "Unable to update supplier quotation. Please check the API connection."
+                );
+            }
+        } finally {
+            setSubmitting(false);
+        }
+    };
+
+    const handleDeleteQuotation = async (quotationId) => {
+        const confirmed = window.confirm(
+            "Are you sure you want to delete this supplier quotation?"
         );
 
-        setSuccess(
-            "Supplier quotation deleted successfully."
-        );
+        if (!confirmed) {
+            return;
+        }
 
-        setEditingQuotation(null);
-        setShowEditQuotationForm(false);
+        try {
+            setError("");
+            setSuccess("");
 
-        await loadData();
-    } catch (error) {
-        console.error(
-            "Failed to delete supplier quotation:",
-            error
-        );
+            await axiosInstance.delete(
+                `/supplier-quotations/${quotationId}`
+            );
 
-        setError(
-            error.response?.data?.message ||
-                "Unable to delete supplier quotation."
-        );
-    }
-};
+            setSuccess(
+                "Supplier quotation deleted successfully."
+            );
+
+            setEditingQuotation(null);
+            setShowEditQuotationForm(false);
+
+            await loadData();
+        } catch (error) {
+            console.error(
+                "Failed to delete supplier quotation:",
+                error
+            );
+
+            setError(
+                error.response?.data?.message ||
+                    "Unable to delete supplier quotation."
+            );
+        }
+    };
 
     const handleDeleteSupplier = async (supplierId) => {
         const confirmed = window.confirm(
@@ -570,676 +573,562 @@ const handleDeleteQuotation = async (quotationId) => {
                 <>
                     {/* Actions */}
                     <div className="mb-6 flex flex-wrap justify-end gap-3">
-                        <button
-                            type="button"
-                            onClick={() => {
-                                setShowSupplierForm(
-                                    true
-                                );
-                                setShowQuotationForm(
-                                    false
-                                );
-                                setError("");
-                                setSuccess("");
-                            }}
-                            className="rounded-lg bg-blue-600 px-5 py-3 text-sm font-medium text-white hover:bg-blue-700"
-                        >
-                            Add Supplier
-                        </button>
+                        {/* RBAC: adding suppliers requires suppliers.create */}
+                        <Can permission={PERMISSIONS.SUPPLIERS_CREATE}>
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    setShowSupplierForm(true);
+                                    setShowQuotationForm(false);
+                                    setError("");
+                                    setSuccess("");
+                                }}
+                                className="rounded-lg bg-blue-600 px-5 py-3 text-sm font-medium text-white hover:bg-blue-700"
+                            >
+                                Add Supplier
+                            </button>
+                        </Can>
 
-                        <button
-                            type="button"
-                            onClick={() => {
-                                setShowQuotationForm(
-                                    true
-                                );
-                                setShowSupplierForm(false);
-                                setError("");
-                                setSuccess("");
-                            }}
-                            className="rounded-lg border px-5 py-3 text-sm font-medium hover:bg-gray-50"
-                        >
-                            Add Quotation
-                        </button>
+                        {/* RBAC: adding quotations requires suppliers.create too */}
+                        <Can permission={PERMISSIONS.SUPPLIERS_CREATE}>
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    setShowQuotationForm(true);
+                                    setShowSupplierForm(false);
+                                    setError("");
+                                    setSuccess("");
+                                }}
+                                className="rounded-lg border px-5 py-3 text-sm font-medium hover:bg-gray-50"
+                            >
+                                Add Quotation
+                            </button>
+                        </Can>
                     </div>
 
-                    {/* Supplier Form */}
+                    {/* Supplier Form — only reachable via gated button, but wrap for safety */}
                     {showSupplierForm && (
-                        <form
-                            onSubmit={
-                                handleCreateSupplier
-                            }
-                            className="mb-6 rounded-lg border bg-white p-6"
-                        >
-                            <div className="mb-6">
-                                <h2 className="text-lg font-semibold">
-                                    Add Supplier
-                                </h2>
+                        <Can permission={PERMISSIONS.SUPPLIERS_CREATE}>
+                            <form
+                                onSubmit={handleCreateSupplier}
+                                className="mb-6 rounded-lg border bg-white p-6"
+                            >
+                                <div className="mb-6">
+                                    <h2 className="text-lg font-semibold">
+                                        Add Supplier
+                                    </h2>
 
-                                <p className="mt-1 text-sm text-gray-500">
-                                    Register a new supplier in
-                                    the system.
-                                </p>
-                            </div>
-
-                            <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
-                                <div>
-                                    <label className="mb-2 block text-sm font-medium">
-                                        Supplier Name
-                                    </label>
-
-                                    <input
-                                        name="supplier_name"
-                                        value={
-                                            supplierForm.supplier_name
-                                        }
-                                        onChange={
-                                            handleSupplierChange
-                                        }
-                                        type="text"
-                                        className="w-full rounded-lg border px-4 py-3 text-sm outline-none"
-                                        placeholder="Enter supplier name"
-                                    />
+                                    <p className="mt-1 text-sm text-gray-500">
+                                        Register a new supplier in
+                                        the system.
+                                    </p>
                                 </div>
 
-                                <div>
-                                    <label className="mb-2 block text-sm font-medium">
-                                        Contact Person
-                                    </label>
+                                <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
+                                    <div>
+                                        <label className="mb-2 block text-sm font-medium">
+                                            Supplier Name
+                                        </label>
+                                        <input
+                                            name="supplier_name"
+                                            value={supplierForm.supplier_name}
+                                            onChange={handleSupplierChange}
+                                            type="text"
+                                            className="w-full rounded-lg border px-4 py-3 text-sm outline-none"
+                                            placeholder="Enter supplier name"
+                                        />
+                                    </div>
 
-                                    <input
-                                        name="contact_person"
-                                        value={
-                                            supplierForm.contact_person
-                                        }
-                                        onChange={
-                                            handleSupplierChange
-                                        }
-                                        type="text"
-                                        className="w-full rounded-lg border px-4 py-3 text-sm outline-none"
-                                        placeholder="Enter contact person"
-                                    />
+                                    <div>
+                                        <label className="mb-2 block text-sm font-medium">
+                                            Contact Person
+                                        </label>
+                                        <input
+                                            name="contact_person"
+                                            value={supplierForm.contact_person}
+                                            onChange={handleSupplierChange}
+                                            type="text"
+                                            className="w-full rounded-lg border px-4 py-3 text-sm outline-none"
+                                            placeholder="Enter contact person"
+                                        />
+                                    </div>
+
+                                    <div>
+                                        <label className="mb-2 block text-sm font-medium">
+                                            Phone
+                                        </label>
+                                        <input
+                                            name="phone"
+                                            value={supplierForm.phone}
+                                            onChange={handleSupplierChange}
+                                            type="text"
+                                            className="w-full rounded-lg border px-4 py-3 text-sm outline-none"
+                                            placeholder="Enter phone number"
+                                        />
+                                    </div>
+
+                                    <div>
+                                        <label className="mb-2 block text-sm font-medium">
+                                            Email
+                                        </label>
+                                        <input
+                                            name="email"
+                                            value={supplierForm.email}
+                                            onChange={handleSupplierChange}
+                                            type="email"
+                                            className="w-full rounded-lg border px-4 py-3 text-sm outline-none"
+                                            placeholder="Enter email"
+                                        />
+                                    </div>
+
+                                    <div className="md:col-span-2">
+                                        <label className="mb-2 block text-sm font-medium">
+                                            Address
+                                        </label>
+                                        <textarea
+                                            name="address"
+                                            value={supplierForm.address}
+                                            onChange={handleSupplierChange}
+                                            rows="3"
+                                            className="w-full rounded-lg border px-4 py-3 text-sm outline-none"
+                                            placeholder="Enter supplier address"
+                                        />
+                                    </div>
+
+                                    <div>
+                                        <label className="mb-2 block text-sm font-medium">
+                                            Status
+                                        </label>
+                                        <select
+                                            name="status"
+                                            value={supplierForm.status}
+                                            onChange={handleSupplierChange}
+                                            className="w-full rounded-lg border px-4 py-3 text-sm outline-none"
+                                        >
+                                            <option value="active">Active</option>
+                                            <option value="inactive">Inactive</option>
+                                        </select>
+                                    </div>
+
+                                    <div>
+                                        <label className="mb-2 block text-sm font-medium">
+                                            Rating
+                                        </label>
+                                        <input
+                                            name="rating"
+                                            value={supplierForm.rating}
+                                            onChange={handleSupplierChange}
+                                            type="number"
+                                            min="0"
+                                            max="5"
+                                            step="0.01"
+                                            className="w-full rounded-lg border px-4 py-3 text-sm outline-none"
+                                            placeholder="0 - 5"
+                                        />
+                                    </div>
                                 </div>
 
-                                <div>
-                                    <label className="mb-2 block text-sm font-medium">
-                                        Phone
-                                    </label>
-
-                                    <input
-                                        name="phone"
-                                        value={
-                                            supplierForm.phone
-                                        }
-                                        onChange={
-                                            handleSupplierChange
-                                        }
-                                        type="text"
-                                        className="w-full rounded-lg border px-4 py-3 text-sm outline-none"
-                                        placeholder="Enter phone number"
-                                    />
-                                </div>
-
-                                <div>
-                                    <label className="mb-2 block text-sm font-medium">
-                                        Email
-                                    </label>
-
-                                    <input
-                                        name="email"
-                                        value={
-                                            supplierForm.email
-                                        }
-                                        onChange={
-                                            handleSupplierChange
-                                        }
-                                        type="email"
-                                        className="w-full rounded-lg border px-4 py-3 text-sm outline-none"
-                                        placeholder="Enter email"
-                                    />
-                                </div>
-
-                                <div className="md:col-span-2">
-                                    <label className="mb-2 block text-sm font-medium">
-                                        Address
-                                    </label>
-
-                                    <textarea
-                                        name="address"
-                                        value={
-                                            supplierForm.address
-                                        }
-                                        onChange={
-                                            handleSupplierChange
-                                        }
-                                        rows="3"
-                                        className="w-full rounded-lg border px-4 py-3 text-sm outline-none"
-                                        placeholder="Enter supplier address"
-                                    />
-                                </div>
-
-                                <div>
-                                    <label className="mb-2 block text-sm font-medium">
-                                        Status
-                                    </label>
-
-                                    <select
-                                        name="status"
-                                        value={
-                                            supplierForm.status
-                                        }
-                                        onChange={
-                                            handleSupplierChange
-                                        }
-                                        className="w-full rounded-lg border px-4 py-3 text-sm outline-none"
+                                <div className="mt-6 flex justify-end gap-3">
+                                    <button
+                                        type="button"
+                                        onClick={() => {
+                                            resetSupplierForm();
+                                            setShowSupplierForm(false);
+                                        }}
+                                        className="rounded-lg border px-5 py-3 text-sm font-medium hover:bg-gray-50"
                                     >
-                                        <option value="active">
-                                            Active
-                                        </option>
+                                        Cancel
+                                    </button>
 
-                                        <option value="inactive">
-                                            Inactive
-                                        </option>
-                                    </select>
+                                    <button
+                                        type="submit"
+                                        disabled={submitting}
+                                        className="rounded-lg bg-blue-600 px-5 py-3 text-sm font-medium text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
+                                    >
+                                        {submitting ? "Saving..." : "Save Supplier"}
+                                    </button>
                                 </div>
-
-                                <div>
-                                    <label className="mb-2 block text-sm font-medium">
-                                        Rating
-                                    </label>
-
-                                    <input
-                                        name="rating"
-                                        value={
-                                            supplierForm.rating
-                                        }
-                                        onChange={
-                                            handleSupplierChange
-                                        }
-                                        type="number"
-                                        min="0"
-                                        max="5"
-                                        step="0.01"
-                                        className="w-full rounded-lg border px-4 py-3 text-sm outline-none"
-                                        placeholder="0 - 5"
-                                    />
-                                </div>
-                            </div>
-
-                            <div className="mt-6 flex justify-end gap-3">
-                                <button
-                                    type="button"
-                                    onClick={() => {
-                                        resetSupplierForm();
-                                        setShowSupplierForm(
-                                            false
-                                        );
-                                    }}
-                                    className="rounded-lg border px-5 py-3 text-sm font-medium hover:bg-gray-50"
-                                >
-                                    Cancel
-                                </button>
-
-                                <button
-                                    type="submit"
-                                    disabled={submitting}
-                                    className="rounded-lg bg-blue-600 px-5 py-3 text-sm font-medium text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
-                                >
-                                    {submitting
-                                        ? "Saving..."
-                                        : "Save Supplier"}
-                                </button>
-                            </div>
-                        </form>
+                            </form>
+                        </Can>
                     )}
 
                     {/* Edit Supplier Form */}
                     {showEditSupplierForm && editingSupplier && (
-                        <form
-                            onSubmit={handleUpdateSupplier}
-                            className="mb-6 rounded-lg border bg-white p-6"
-                        >
-                            <div className="mb-6 flex items-start justify-between">
-                                <div>
-                                    <h2 className="text-lg font-semibold">
-                                        Edit Supplier
-                                    </h2>
+                        <Can permission={PERMISSIONS.SUPPLIERS_EDIT}>
+                            <form
+                                onSubmit={handleUpdateSupplier}
+                                className="mb-6 rounded-lg border bg-white p-6"
+                            >
+                                <div className="mb-6 flex items-start justify-between">
+                                    <div>
+                                        <h2 className="text-lg font-semibold">
+                                            Edit Supplier
+                                        </h2>
 
-                                    <p className="mt-1 text-sm text-gray-500">
-                                        Update supplier information.
-                                    </p>
-                                </div>
+                                        <p className="mt-1 text-sm text-gray-500">
+                                            Update supplier information.
+                                        </p>
+                                    </div>
 
-                                <button
-                                    type="button"
-                                    onClick={() => {
-                                        resetSupplierForm();
-                                        setEditingSupplier(null);
-                                        setShowEditSupplierForm(false);
-                                    }}
-                                    className="text-sm text-gray-500 hover:text-gray-700"
-                                >
-                                    Cancel
-                                </button>
-                            </div>
-
-                            <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
-                                <div>
-                                    <label className="mb-2 block text-sm font-medium">
-                                        Supplier Name
-                                    </label>
-
-                                    <input
-                                        name="supplier_name"
-                                        value={supplierForm.supplier_name}
-                                        onChange={handleSupplierChange}
-                                        type="text"
-                                        className="w-full rounded-lg border px-4 py-3 text-sm outline-none"
-                                        placeholder="Enter supplier name"
-                                    />
-                                </div>
-
-                                <div>
-                                    <label className="mb-2 block text-sm font-medium">
-                                        Contact Person
-                                    </label>
-
-                                    <input
-                                        name="contact_person"
-                                        value={supplierForm.contact_person}
-                                        onChange={handleSupplierChange}
-                                        type="text"
-                                        className="w-full rounded-lg border px-4 py-3 text-sm outline-none"
-                                        placeholder="Enter contact person"
-                                    />
-                                </div>
-
-                                <div>
-                                    <label className="mb-2 block text-sm font-medium">
-                                        Phone
-                                    </label>
-
-                                    <input
-                                        name="phone"
-                                        value={supplierForm.phone}
-                                        onChange={handleSupplierChange}
-                                        type="text"
-                                        className="w-full rounded-lg border px-4 py-3 text-sm outline-none"
-                                        placeholder="Enter phone number"
-                                    />
-                                </div>
-
-                                <div>
-                                    <label className="mb-2 block text-sm font-medium">
-                                        Email
-                                    </label>
-
-                                    <input
-                                        name="email"
-                                        value={supplierForm.email}
-                                        onChange={handleSupplierChange}
-                                        type="email"
-                                        className="w-full rounded-lg border px-4 py-3 text-sm outline-none"
-                                        placeholder="Enter email"
-                                    />
-                                </div>
-
-                                <div className="md:col-span-2">
-                                    <label className="mb-2 block text-sm font-medium">
-                                        Address
-                                    </label>
-
-                                    <textarea
-                                        name="address"
-                                        value={supplierForm.address}
-                                        onChange={handleSupplierChange}
-                                        rows="3"
-                                        className="w-full rounded-lg border px-4 py-3 text-sm outline-none"
-                                        placeholder="Enter supplier address"
-                                    />
-                                </div>
-
-                                <div>
-                                    <label className="mb-2 block text-sm font-medium">
-                                        Status
-                                    </label>
-
-                                    <select
-                                        name="status"
-                                        value={supplierForm.status}
-                                        onChange={handleSupplierChange}
-                                        className="w-full rounded-lg border px-4 py-3 text-sm outline-none"
+                                    <button
+                                        type="button"
+                                        onClick={() => {
+                                            resetSupplierForm();
+                                            setEditingSupplier(null);
+                                            setShowEditSupplierForm(false);
+                                        }}
+                                        className="text-sm text-gray-500 hover:text-gray-700"
                                     >
-                                        <option value="active">
-                                            Active
-                                        </option>
-
-                                        <option value="inactive">
-                                            Inactive
-                                        </option>
-                                    </select>
+                                        Cancel
+                                    </button>
                                 </div>
 
-                                <div>
-                                    <label className="mb-2 block text-sm font-medium">
-                                        Rating
-                                    </label>
+                                <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
+                                    <div>
+                                        <label className="mb-2 block text-sm font-medium">
+                                            Supplier Name
+                                        </label>
+                                        <input
+                                            name="supplier_name"
+                                            value={supplierForm.supplier_name}
+                                            onChange={handleSupplierChange}
+                                            type="text"
+                                            className="w-full rounded-lg border px-4 py-3 text-sm outline-none"
+                                            placeholder="Enter supplier name"
+                                        />
+                                    </div>
 
-                                    <input
-                                        name="rating"
-                                        value={supplierForm.rating}
-                                        onChange={handleSupplierChange}
-                                        type="number"
-                                        min="0"
-                                        max="5"
-                                        step="0.01"
-                                        className="w-full rounded-lg border px-4 py-3 text-sm outline-none"
-                                        placeholder="0 - 5"
-                                    />
+                                    <div>
+                                        <label className="mb-2 block text-sm font-medium">
+                                            Contact Person
+                                        </label>
+                                        <input
+                                            name="contact_person"
+                                            value={supplierForm.contact_person}
+                                            onChange={handleSupplierChange}
+                                            type="text"
+                                            className="w-full rounded-lg border px-4 py-3 text-sm outline-none"
+                                            placeholder="Enter contact person"
+                                        />
+                                    </div>
+
+                                    <div>
+                                        <label className="mb-2 block text-sm font-medium">
+                                            Phone
+                                        </label>
+                                        <input
+                                            name="phone"
+                                            value={supplierForm.phone}
+                                            onChange={handleSupplierChange}
+                                            type="text"
+                                            className="w-full rounded-lg border px-4 py-3 text-sm outline-none"
+                                            placeholder="Enter phone number"
+                                        />
+                                    </div>
+
+                                    <div>
+                                        <label className="mb-2 block text-sm font-medium">
+                                            Email
+                                        </label>
+                                        <input
+                                            name="email"
+                                            value={supplierForm.email}
+                                            onChange={handleSupplierChange}
+                                            type="email"
+                                            className="w-full rounded-lg border px-4 py-3 text-sm outline-none"
+                                            placeholder="Enter email"
+                                        />
+                                    </div>
+
+                                    <div className="md:col-span-2">
+                                        <label className="mb-2 block text-sm font-medium">
+                                            Address
+                                        </label>
+                                        <textarea
+                                            name="address"
+                                            value={supplierForm.address}
+                                            onChange={handleSupplierChange}
+                                            rows="3"
+                                            className="w-full rounded-lg border px-4 py-3 text-sm outline-none"
+                                            placeholder="Enter supplier address"
+                                        />
+                                    </div>
+
+                                    <div>
+                                        <label className="mb-2 block text-sm font-medium">
+                                            Status
+                                        </label>
+                                        <select
+                                            name="status"
+                                            value={supplierForm.status}
+                                            onChange={handleSupplierChange}
+                                            className="w-full rounded-lg border px-4 py-3 text-sm outline-none"
+                                        >
+                                            <option value="active">Active</option>
+                                            <option value="inactive">Inactive</option>
+                                        </select>
+                                    </div>
+
+                                    <div>
+                                        <label className="mb-2 block text-sm font-medium">
+                                            Rating
+                                        </label>
+                                        <input
+                                            name="rating"
+                                            value={supplierForm.rating}
+                                            onChange={handleSupplierChange}
+                                            type="number"
+                                            min="0"
+                                            max="5"
+                                            step="0.01"
+                                            className="w-full rounded-lg border px-4 py-3 text-sm outline-none"
+                                            placeholder="0 - 5"
+                                        />
+                                    </div>
                                 </div>
-                            </div>
 
-                            <div className="mt-6 flex justify-end gap-3">
-                                <button
-                                    type="button"
-                                    onClick={() => {
-                                        resetSupplierForm();
-                                        setEditingSupplier(null);
-                                        setShowEditSupplierForm(false);
-                                    }}
-                                    className="rounded-lg border px-5 py-3 text-sm font-medium hover:bg-gray-50"
-                                >
-                                    Cancel
-                                </button>
+                                <div className="mt-6 flex justify-end gap-3">
+                                    <button
+                                        type="button"
+                                        onClick={() => {
+                                            resetSupplierForm();
+                                            setEditingSupplier(null);
+                                            setShowEditSupplierForm(false);
+                                        }}
+                                        className="rounded-lg border px-5 py-3 text-sm font-medium hover:bg-gray-50"
+                                    >
+                                        Cancel
+                                    </button>
 
-                                <button
-                                    type="submit"
-                                    disabled={submitting}
-                                    className="rounded-lg bg-blue-600 px-5 py-3 text-sm font-medium text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
-                                >
-                                    {submitting
-                                        ? "Updating..."
-                                        : "Update Supplier"}
-                                </button>
-                            </div>
-                        </form>
+                                    <button
+                                        type="submit"
+                                        disabled={submitting}
+                                        className="rounded-lg bg-blue-600 px-5 py-3 text-sm font-medium text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
+                                    >
+                                        {submitting ? "Updating..." : "Update Supplier"}
+                                    </button>
+                                </div>
+                            </form>
+                        </Can>
                     )}
 
                     {/* Quotation Form */}
                     {showQuotationForm && (
-                        <form
-                            onSubmit={
-                                handleCreateQuotation
-                            }
-                            className="mb-6 rounded-lg border bg-white p-6"
-                        >
-                            <div className="mb-6">
-                                <h2 className="text-lg font-semibold">
-                                    Add Supplier Quotation
-                                </h2>
+                        <Can permission={PERMISSIONS.SUPPLIERS_CREATE}>
+                            <form
+                                onSubmit={handleCreateQuotation}
+                                className="mb-6 rounded-lg border bg-white p-6"
+                            >
+                                <div className="mb-6">
+                                    <h2 className="text-lg font-semibold">
+                                        Add Supplier Quotation
+                                    </h2>
 
-                                <p className="mt-1 text-sm text-gray-500">
-                                    Record a quotation received
-                                    from a supplier.
-                                </p>
-                            </div>
+                                    <p className="mt-1 text-sm text-gray-500">
+                                        Record a quotation received
+                                        from a supplier.
+                                    </p>
+                                </div>
 
-                            <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
-                                <div>
-                                    <label className="mb-2 block text-sm font-medium">
-                                        Supplier
-                                    </label>
-
-                                    <select
-                                        name="supplier_id"
-                                        value={
-                                            quotationForm.supplier_id
-                                        }
-                                        onChange={
-                                            handleQuotationChange
-                                        }
-                                        className="w-full rounded-lg border px-4 py-3 text-sm outline-none"
-                                    >
-                                        <option value="">
-                                            Select supplier
-                                        </option>
-
-                                        {suppliers.map(
-                                            (supplier) => (
+                                <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
+                                    <div>
+                                        <label className="mb-2 block text-sm font-medium">
+                                            Supplier
+                                        </label>
+                                        <select
+                                            name="supplier_id"
+                                            value={quotationForm.supplier_id}
+                                            onChange={handleQuotationChange}
+                                            className="w-full rounded-lg border px-4 py-3 text-sm outline-none"
+                                        >
+                                            <option value="">Select supplier</option>
+                                            {suppliers.map((supplier) => (
                                                 <option
-                                                    key={
-                                                        supplier.supplier_id
-                                                    }
-                                                    value={
-                                                        supplier.supplier_id
-                                                    }
+                                                    key={supplier.supplier_id}
+                                                    value={supplier.supplier_id}
                                                 >
-                                                    {
-                                                        supplier.supplier_name
-                                                    }
+                                                    {supplier.supplier_name}
                                                 </option>
-                                            )
-                                        )}
-                                    </select>
+                                            ))}
+                                        </select>
+                                    </div>
+
+                                    <div>
+                                        <label className="mb-2 block text-sm font-medium">
+                                            Quotation Number
+                                        </label>
+                                        <input
+                                            name="quotation_no"
+                                            value={quotationForm.quotation_no}
+                                            onChange={handleQuotationChange}
+                                            type="text"
+                                            className="w-full rounded-lg border px-4 py-3 text-sm outline-none"
+                                            placeholder="Enter quotation number"
+                                        />
+                                    </div>
+
+                                    <div>
+                                        <label className="mb-2 block text-sm font-medium">
+                                            Quotation Date
+                                        </label>
+                                        <input
+                                            name="quotation_date"
+                                            value={quotationForm.quotation_date}
+                                            onChange={handleQuotationChange}
+                                            type="date"
+                                            className="w-full rounded-lg border px-4 py-3 text-sm outline-none"
+                                        />
+                                    </div>
+
+                                    <div>
+                                        <label className="mb-2 block text-sm font-medium">
+                                            Status
+                                        </label>
+                                        <select
+                                            name="status"
+                                            value={quotationForm.status}
+                                            onChange={handleQuotationChange}
+                                            className="w-full rounded-lg border px-4 py-3 text-sm outline-none"
+                                        >
+                                            <option value="pending">Pending</option>
+                                            <option value="approved">Approved</option>
+                                            <option value="rejected">Rejected</option>
+                                        </select>
+                                    </div>
                                 </div>
 
-                                <div>
-                                    <label className="mb-2 block text-sm font-medium">
-                                        Quotation Number
-                                    </label>
-
-                                    <input
-                                        name="quotation_no"
-                                        value={
-                                            quotationForm.quotation_no
-                                        }
-                                        onChange={
-                                            handleQuotationChange
-                                        }
-                                        type="text"
-                                        className="w-full rounded-lg border px-4 py-3 text-sm outline-none"
-                                        placeholder="Enter quotation number"
-                                    />
-                                </div>
-
-                                <div>
-                                    <label className="mb-2 block text-sm font-medium">
-                                        Quotation Date
-                                    </label>
-
-                                    <input
-                                        name="quotation_date"
-                                        value={
-                                            quotationForm.quotation_date
-                                        }
-                                        onChange={
-                                            handleQuotationChange
-                                        }
-                                        type="date"
-                                        className="w-full rounded-lg border px-4 py-3 text-sm outline-none"
-                                    />
-                                </div>
-
-                                <div>
-                                    <label className="mb-2 block text-sm font-medium">
-                                        Status
-                                    </label>
-
-                                    <select
-                                        name="status"
-                                        value={
-                                            quotationForm.status
-                                        }
-                                        onChange={
-                                            handleQuotationChange
-                                        }
-                                        className="w-full rounded-lg border px-4 py-3 text-sm outline-none"
+                                <div className="mt-6 flex justify-end gap-3">
+                                    <button
+                                        type="button"
+                                        onClick={() => {
+                                            resetQuotationForm();
+                                            setShowQuotationForm(false);
+                                        }}
+                                        className="rounded-lg border px-5 py-3 text-sm font-medium hover:bg-gray-50"
                                     >
-                                        <option value="pending">
-                                            Pending
-                                        </option>
+                                        Cancel
+                                    </button>
 
-                                        <option value="approved">
-                                            Approved
-                                        </option>
-
-                                        <option value="rejected">
-                                            Rejected
-                                        </option>
-                                    </select>
+                                    <button
+                                        type="submit"
+                                        disabled={submitting}
+                                        className="rounded-lg bg-blue-600 px-5 py-3 text-sm font-medium text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
+                                    >
+                                        {submitting ? "Saving..." : "Save Quotation"}
+                                    </button>
                                 </div>
-                            </div>
-
-                            <div className="mt-6 flex justify-end gap-3">
-                                <button
-                                    type="button"
-                                    onClick={() => {
-                                        resetQuotationForm();
-                                        setShowQuotationForm(
-                                            false
-                                        );
-                                    }}
-                                    className="rounded-lg border px-5 py-3 text-sm font-medium hover:bg-gray-50"
-                                >
-                                    Cancel
-                                </button>
-
-                                <button
-                                    type="submit"
-                                    disabled={submitting}
-                                    className="rounded-lg bg-blue-600 px-5 py-3 text-sm font-medium text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
-                                >
-                                    {submitting
-                                        ? "Saving..."
-                                        : "Save Quotation"}
-                                </button>
-                            </div>
-                        </form>
+                            </form>
+                        </Can>
                     )}
 
                     {/* Edit Quotation Form */}
-{showEditQuotationForm && editingQuotation && (
-    <form
-        onSubmit={handleUpdateQuotation}
-        className="mb-6 rounded-lg border bg-white p-6"
-    >
-        <div className="mb-6">
-            <h2 className="text-lg font-semibold">
-                Edit Supplier Quotation
-            </h2>
+                    {showEditQuotationForm && editingQuotation && (
+                        <Can permission={PERMISSIONS.SUPPLIERS_EDIT}>
+                            <form
+                                onSubmit={handleUpdateQuotation}
+                                className="mb-6 rounded-lg border bg-white p-6"
+                            >
+                                <div className="mb-6">
+                                    <h2 className="text-lg font-semibold">
+                                        Edit Supplier Quotation
+                                    </h2>
 
-            <p className="mt-1 text-sm text-gray-500">
-                Update the supplier quotation information.
-            </p>
-        </div>
+                                    <p className="mt-1 text-sm text-gray-500">
+                                        Update the supplier quotation information.
+                                    </p>
+                                </div>
 
-        <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
-            <div>
-                <label className="mb-2 block text-sm font-medium">
-                    Supplier
-                </label>
+                                <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
+                                    <div>
+                                        <label className="mb-2 block text-sm font-medium">
+                                            Supplier
+                                        </label>
+                                        <select
+                                            name="supplier_id"
+                                            value={quotationForm.supplier_id}
+                                            onChange={handleQuotationChange}
+                                            className="w-full rounded-lg border px-4 py-3 text-sm outline-none"
+                                        >
+                                            <option value="">Select supplier</option>
+                                            {suppliers.map((supplier) => (
+                                                <option
+                                                    key={supplier.supplier_id}
+                                                    value={supplier.supplier_id}
+                                                >
+                                                    {supplier.supplier_name}
+                                                </option>
+                                            ))}
+                                        </select>
+                                    </div>
 
-                <select
-                    name="supplier_id"
-                    value={quotationForm.supplier_id}
-                    onChange={handleQuotationChange}
-                    className="w-full rounded-lg border px-4 py-3 text-sm outline-none"
-                >
-                    <option value="">
-                        Select supplier
-                    </option>
+                                    <div>
+                                        <label className="mb-2 block text-sm font-medium">
+                                            Quotation Number
+                                        </label>
+                                        <input
+                                            name="quotation_no"
+                                            value={quotationForm.quotation_no}
+                                            onChange={handleQuotationChange}
+                                            type="text"
+                                            className="w-full rounded-lg border px-4 py-3 text-sm outline-none"
+                                            placeholder="Enter quotation number"
+                                        />
+                                    </div>
 
-                    {suppliers.map((supplier) => (
-                        <option
-                            key={supplier.supplier_id}
-                            value={supplier.supplier_id}
-                        >
-                            {supplier.supplier_name}
-                        </option>
-                    ))}
-                </select>
-            </div>
+                                    <div>
+                                        <label className="mb-2 block text-sm font-medium">
+                                            Quotation Date
+                                        </label>
+                                        <input
+                                            name="quotation_date"
+                                            value={quotationForm.quotation_date}
+                                            onChange={handleQuotationChange}
+                                            type="date"
+                                            className="w-full rounded-lg border px-4 py-3 text-sm outline-none"
+                                        />
+                                    </div>
 
-            <div>
-                <label className="mb-2 block text-sm font-medium">
-                    Quotation Number
-                </label>
+                                    <div>
+                                        <label className="mb-2 block text-sm font-medium">
+                                            Status
+                                        </label>
+                                        <select
+                                            name="status"
+                                            value={quotationForm.status}
+                                            onChange={handleQuotationChange}
+                                            className="w-full rounded-lg border px-4 py-3 text-sm outline-none"
+                                        >
+                                            <option value="pending">Pending</option>
+                                            <option value="approved">Approved</option>
+                                            <option value="rejected">Rejected</option>
+                                        </select>
+                                    </div>
+                                </div>
 
-                <input
-                    name="quotation_no"
-                    value={quotationForm.quotation_no}
-                    onChange={handleQuotationChange}
-                    type="text"
-                    className="w-full rounded-lg border px-4 py-3 text-sm outline-none"
-                    placeholder="Enter quotation number"
-                />
-            </div>
+                                <div className="mt-6 flex justify-end gap-3">
+                                    <button
+                                        type="button"
+                                        onClick={() => {
+                                            resetQuotationForm();
+                                            setEditingQuotation(null);
+                                            setShowEditQuotationForm(false);
+                                        }}
+                                        className="rounded-lg border px-5 py-3 text-sm font-medium hover:bg-gray-50"
+                                    >
+                                        Cancel
+                                    </button>
 
-            <div>
-                <label className="mb-2 block text-sm font-medium">
-                    Quotation Date
-                </label>
-
-                <input
-                    name="quotation_date"
-                    value={quotationForm.quotation_date}
-                    onChange={handleQuotationChange}
-                    type="date"
-                    className="w-full rounded-lg border px-4 py-3 text-sm outline-none"
-                />
-            </div>
-
-            <div>
-                <label className="mb-2 block text-sm font-medium">
-                    Status
-                </label>
-
-                <select
-                    name="status"
-                    value={quotationForm.status}
-                    onChange={handleQuotationChange}
-                    className="w-full rounded-lg border px-4 py-3 text-sm outline-none"
-                >
-                    <option value="pending">
-                        Pending
-                    </option>
-
-                    <option value="approved">
-                        Approved
-                    </option>
-
-                    <option value="rejected">
-                        Rejected
-                    </option>
-                </select>
-            </div>
-        </div>
-
-        <div className="mt-6 flex justify-end gap-3">
-            <button
-                type="button"
-                onClick={() => {
-                    resetQuotationForm();
-                    setEditingQuotation(null);
-                    setShowEditQuotationForm(false);
-                }}
-                className="rounded-lg border px-5 py-3 text-sm font-medium hover:bg-gray-50"
-            >
-                Cancel
-            </button>
-
-            <button
-                type="submit"
-                disabled={submitting}
-                className="rounded-lg bg-blue-600 px-5 py-3 text-sm font-medium text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
-            >
-                {submitting
-                    ? "Updating..."
-                    : "Update Quotation"}
-            </button>
-        </div>
-    </form>
-)}
+                                    <button
+                                        type="submit"
+                                        disabled={submitting}
+                                        className="rounded-lg bg-blue-600 px-5 py-3 text-sm font-medium text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
+                                    >
+                                        {submitting ? "Updating..." : "Update Quotation"}
+                                    </button>
+                                </div>
+                            </form>
+                        </Can>
+                    )}
 
                     {/* Suppliers */}
                     <div className="overflow-hidden rounded-lg border bg-white">
@@ -1258,33 +1147,20 @@ const handleDeleteQuotation = async (quotationId) => {
                             <table className="w-full">
                                 <thead className="border-b bg-gray-50">
                                     <tr>
-                                        <th className="px-4 py-3 text-left text-sm font-medium">
-                                            Supplier
-                                        </th>
+                                        <th className="px-4 py-3 text-left text-sm font-medium">Supplier</th>
+                                        <th className="px-4 py-3 text-left text-sm font-medium">Contact Person</th>
+                                        <th className="px-4 py-3 text-left text-sm font-medium">Phone</th>
+                                        <th className="px-4 py-3 text-left text-sm font-medium">Status</th>
+                                        <th className="px-4 py-3 text-left text-sm font-medium">Rating</th>
+                                        <th className="px-4 py-3 text-left text-sm font-medium">Quotations</th>
 
-                                        <th className="px-4 py-3 text-left text-sm font-medium">
-                                            Contact Person
-                                        </th>
-
-                                        <th className="px-4 py-3 text-left text-sm font-medium">
-                                            Phone
-                                        </th>
-
-                                        <th className="px-4 py-3 text-left text-sm font-medium">
-                                            Status
-                                        </th>
-
-                                        <th className="px-4 py-3 text-left text-sm font-medium">
-                                            Rating
-                                        </th>
-
-                                        <th className="px-4 py-3 text-left text-sm font-medium">
-                                            Quotations
-                                        </th>
-
-                                        <th className="px-4 py-3 text-right text-sm font-medium">
-                                            Action
-                                        </th>
+                                        {/* RBAC: hide Actions column if user can't edit/delete */}
+                                        <CanAny permissions={[
+                                            PERMISSIONS.SUPPLIERS_EDIT,
+                                            PERMISSIONS.SUPPLIERS_DELETE,
+                                        ]}>
+                                            <th className="px-4 py-3 text-right text-sm font-medium">Action</th>
+                                        </CanAny>
                                     </tr>
                                 </thead>
 
@@ -1295,91 +1171,78 @@ const handleDeleteQuotation = async (quotationId) => {
                                                 colSpan="7"
                                                 className="px-4 py-8 text-center text-sm text-gray-500"
                                             >
-                                                No suppliers
-                                                found.
+                                                No suppliers found.
                                             </td>
                                         </tr>
                                     ) : (
-                                        suppliers.map(
-                                            (supplier) => (
-                                                <tr
-                                                    key={
-                                                        supplier.supplier_id
-                                                    }
-                                                    className="border-b last:border-b-0"
-                                                >
-                                                    <td className="px-4 py-4 text-sm font-medium">
-                                                        {
-                                                            supplier.supplier_name
-                                                        }
-                                                    </td>
+                                        suppliers.map((supplier) => (
+                                            <tr
+                                                key={supplier.supplier_id}
+                                                className="border-b last:border-b-0"
+                                            >
+                                                <td className="px-4 py-4 text-sm font-medium">
+                                                    {supplier.supplier_name}
+                                                </td>
 
-                                                    <td className="px-4 py-4 text-sm">
-                                                        {supplier.contact_person ||
-                                                            "—"}
-                                                    </td>
+                                                <td className="px-4 py-4 text-sm">
+                                                    {supplier.contact_person || "—"}
+                                                </td>
 
-                                                    <td className="px-4 py-4 text-sm">
-                                                        {supplier.phone ||
-                                                            "—"}
-                                                    </td>
+                                                <td className="px-4 py-4 text-sm">
+                                                    {supplier.phone || "—"}
+                                                </td>
 
-                                                    <td className="px-4 py-4 text-sm capitalize">
-                                                        {
-                                                            supplier.status
-                                                        }
-                                                    </td>
+                                                <td className="px-4 py-4 text-sm capitalize">
+                                                    {supplier.status}
+                                                </td>
 
-                                                    <td className="px-4 py-4 text-sm">
-                                                        {supplier.rating ??
-                                                            "—"}
-                                                    </td>
+                                                <td className="px-4 py-4 text-sm">
+                                                    {supplier.rating ?? "—"}
+                                                </td>
 
-                                                    <td className="px-4 py-4 text-sm">
-                                                        {supplier
-                                                            .quotations
-                                                            ?.length ||
-                                                            0}
-                                                    </td>
+                                                <td className="px-4 py-4 text-sm">
+                                                    {supplier.quotations?.length || 0}
+                                                </td>
 
+                                                <CanAny permissions={[
+                                                    PERMISSIONS.SUPPLIERS_EDIT,
+                                                    PERMISSIONS.SUPPLIERS_DELETE,
+                                                ]}>
                                                     <td className="px-4 py-4 text-right">
                                                         <div className="flex justify-end gap-3">
+                                                            {/* View is read-only */}
                                                             <button
                                                                 type="button"
-                                                                onClick={() =>
-                                                                    handleViewSupplier(supplier)
-                                                                }
+                                                                onClick={() => handleViewSupplier(supplier)}
                                                                 className="text-sm font-medium text-blue-600 hover:text-blue-700"
                                                             >
                                                                 View
                                                             </button>
 
-                                                            <button
-                                                                type="button"
-                                                                onClick={() =>
-                                                                    handleEditSupplier(supplier)
-                                                                }
-                                                                className="text-sm font-medium text-gray-700 hover:text-gray-900"
-                                                            >
-                                                                Edit
-                                                            </button>
+                                                            <Can permission={PERMISSIONS.SUPPLIERS_EDIT}>
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={() => handleEditSupplier(supplier)}
+                                                                    className="text-sm font-medium text-gray-700 hover:text-gray-900"
+                                                                >
+                                                                    Edit
+                                                                </button>
+                                                            </Can>
 
-                                                            <button
-                                                                type="button"
-                                                                onClick={() =>
-                                                                    handleDeleteSupplier(
-                                                                        supplier.supplier_id
-                                                                    )
-                                                                }
-                                                                className="text-sm font-medium text-red-600 hover:text-red-700"
-                                                            >
-                                                                Delete
-                                                            </button>
+                                                            <Can permission={PERMISSIONS.SUPPLIERS_DELETE}>
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={() => handleDeleteSupplier(supplier.supplier_id)}
+                                                                    className="text-sm font-medium text-red-600 hover:text-red-700"
+                                                                >
+                                                                    Delete
+                                                                </button>
+                                                            </Can>
                                                         </div>
                                                     </td>
-                                                </tr>
-                                            )
-                                        )
+                                                </CanAny>
+                                            </tr>
+                                        ))
                                     )}
                                 </tbody>
                             </table>
@@ -1392,35 +1255,26 @@ const handleDeleteQuotation = async (quotationId) => {
             {selectedSupplier && (
                 <div
                     className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
-                    onClick={() =>
-                        setSelectedSupplier(null)
-                    }
+                    onClick={() => setSelectedSupplier(null)}
                 >
                     <div
                         className="max-h-[90vh] w-full max-w-3xl overflow-y-auto rounded-xl bg-white shadow-xl"
-                        onClick={(event) =>
-                            event.stopPropagation()
-                        }
+                        onClick={(event) => event.stopPropagation()}
                     >
                         <div className="flex items-center justify-between border-b px-6 py-4">
                             <div>
                                 <h2 className="text-lg font-semibold">
-                                    {
-                                        selectedSupplier.supplier_name
-                                    }
+                                    {selectedSupplier.supplier_name}
                                 </h2>
 
                                 <p className="mt-1 text-sm text-gray-500">
-                                    Supplier information and
-                                    quotations
+                                    Supplier information and quotations
                                 </p>
                             </div>
 
                             <button
                                 type="button"
-                                onClick={() =>
-                                    setSelectedSupplier(null)
-                                }
+                                onClick={() => setSelectedSupplier(null)}
                                 className="text-2xl leading-none text-gray-400 hover:text-gray-700"
                             >
                                 ×
@@ -1430,69 +1284,44 @@ const handleDeleteQuotation = async (quotationId) => {
                         <div className="p-6">
                             <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
                                 <div>
-                                    <p className="text-xs font-medium uppercase text-gray-500">
-                                        Supplier
-                                    </p>
-
+                                    <p className="text-xs font-medium uppercase text-gray-500">Supplier</p>
                                     <p className="mt-1 text-sm font-medium">
-                                        {
-                                            selectedSupplier.supplier_name
-                                        }
+                                        {selectedSupplier.supplier_name}
                                     </p>
                                 </div>
 
                                 <div>
-                                    <p className="text-xs font-medium uppercase text-gray-500">
-                                        Contact Person
-                                    </p>
-
+                                    <p className="text-xs font-medium uppercase text-gray-500">Contact Person</p>
                                     <p className="mt-1 text-sm">
-                                        {selectedSupplier.contact_person ||
-                                            "—"}
+                                        {selectedSupplier.contact_person || "—"}
                                     </p>
                                 </div>
 
                                 <div>
-                                    <p className="text-xs font-medium uppercase text-gray-500">
-                                        Phone
-                                    </p>
-
+                                    <p className="text-xs font-medium uppercase text-gray-500">Phone</p>
                                     <p className="mt-1 text-sm">
-                                        {selectedSupplier.phone ||
-                                            "—"}
+                                        {selectedSupplier.phone || "—"}
                                     </p>
                                 </div>
 
                                 <div>
-                                    <p className="text-xs font-medium uppercase text-gray-500">
-                                        Email
-                                    </p>
-
+                                    <p className="text-xs font-medium uppercase text-gray-500">Email</p>
                                     <p className="mt-1 text-sm">
-                                        {selectedSupplier.email ||
-                                            "—"}
+                                        {selectedSupplier.email || "—"}
                                     </p>
                                 </div>
 
                                 <div>
-                                    <p className="text-xs font-medium uppercase text-gray-500">
-                                        Address
-                                    </p>
-
+                                    <p className="text-xs font-medium uppercase text-gray-500">Address</p>
                                     <p className="mt-1 text-sm">
-                                        {selectedSupplier.address ||
-                                            "—"}
+                                        {selectedSupplier.address || "—"}
                                     </p>
                                 </div>
 
                                 <div>
-                                    <p className="text-xs font-medium uppercase text-gray-500">
-                                        Rating
-                                    </p>
-
+                                    <p className="text-xs font-medium uppercase text-gray-500">Rating</p>
                                     <p className="mt-1 text-sm">
-                                        {selectedSupplier.rating ??
-                                            "—"}
+                                        {selectedSupplier.rating ?? "—"}
                                     </p>
                                 </div>
                             </div>
@@ -1503,87 +1332,76 @@ const handleDeleteQuotation = async (quotationId) => {
                                 </h3>
 
                                 <div className="overflow-hidden rounded-lg border">
-                                    {supplierQuotations.length ===
-                                    0 ? (
+                                    {supplierQuotations.length === 0 ? (
                                         <div className="p-6 text-center text-sm text-gray-500">
-                                            No quotations found
-                                            for this supplier.
+                                            No quotations found for this supplier.
                                         </div>
                                     ) : (
                                         <table className="w-full">
                                             <thead className="border-b bg-gray-50">
                                                 <tr>
-                                                    <th className="px-4 py-3 text-left text-sm font-medium">
-                                                        Quotation No.
-                                                    </th>
-
-                                                    <th className="px-4 py-3 text-left text-sm font-medium">
-                                                        Date
-                                                    </th>
-
-                                                    <th className="px-4 py-3 text-left text-sm font-medium">
-                                                        Status
-                                                    </th>
-
-                                                    <th className="px-4 py-3 text-right text-sm font-medium">
-                                                        Action
-                                                    </th>
+                                                    <th className="px-4 py-3 text-left text-sm font-medium">Quotation No.</th>
+                                                    <th className="px-4 py-3 text-left text-sm font-medium">Date</th>
+                                                    <th className="px-4 py-3 text-left text-sm font-medium">Status</th>
+                                                    <CanAny permissions={[
+                                                        PERMISSIONS.SUPPLIERS_EDIT,
+                                                        PERMISSIONS.SUPPLIERS_DELETE,
+                                                    ]}>
+                                                        <th className="px-4 py-3 text-right text-sm font-medium">Action</th>
+                                                    </CanAny>
                                                 </tr>
                                             </thead>
 
                                             <tbody>
-                                                {supplierQuotations.map(
-                                                    (
-                                                        quotation
-                                                    ) => (
-                                                        <tr
-                                                            key={quotation.quotation_id}
-                                                            className="border-b last:border-b-0"
-                                                        >
-                                                            <td className="px-4 py-3 text-sm">
-                                                                {quotation.quotation_no}
-                                                            </td>
+                                                {supplierQuotations.map((quotation) => (
+                                                    <tr
+                                                        key={quotation.quotation_id}
+                                                        className="border-b last:border-b-0"
+                                                    >
+                                                        <td className="px-4 py-3 text-sm">
+                                                            {quotation.quotation_no}
+                                                        </td>
 
-                                                            <td className="px-4 py-3 text-sm">
-                                                                {quotation.quotation_date
-                                                                    ? new Date(
-                                                                        quotation.quotation_date
-                                                                    ).toLocaleDateString()
-                                                                    : "—"}
-                                                            </td>
+                                                        <td className="px-4 py-3 text-sm">
+                                                            {quotation.quotation_date
+                                                                ? new Date(quotation.quotation_date).toLocaleDateString()
+                                                                : "—"}
+                                                        </td>
 
-                                                            <td className="px-4 py-3 text-sm capitalize">
-                                                                {quotation.status}
-                                                            </td>
+                                                        <td className="px-4 py-3 text-sm capitalize">
+                                                            {quotation.status}
+                                                        </td>
 
+                                                        <CanAny permissions={[
+                                                            PERMISSIONS.SUPPLIERS_EDIT,
+                                                            PERMISSIONS.SUPPLIERS_DELETE,
+                                                        ]}>
                                                             <td className="px-4 py-3 text-right">
                                                                 <div className="flex justify-end gap-3">
-                                                                    <button
-                                                                        type="button"
-                                                                        onClick={() =>
-                                                                            handleEditQuotation(quotation)
-                                                                        }
-                                                                        className="text-sm font-medium text-blue-600 hover:text-blue-700"
-                                                                    >
-                                                                        Edit
-                                                                    </button>
+                                                                    <Can permission={PERMISSIONS.SUPPLIERS_EDIT}>
+                                                                        <button
+                                                                            type="button"
+                                                                            onClick={() => handleEditQuotation(quotation)}
+                                                                            className="text-sm font-medium text-blue-600 hover:text-blue-700"
+                                                                        >
+                                                                            Edit
+                                                                        </button>
+                                                                    </Can>
 
-                                                                    <button
-                                                                        type="button"
-                                                                        onClick={() =>
-                                                                            handleDeleteQuotation(
-                                                                                quotation.quotation_id
-                                                                            )
-                                                                        }
-                                                                        className="text-sm font-medium text-red-600 hover:text-red-700"
-                                                                    >
-                                                                        Delete
-                                                                    </button>
+                                                                    <Can permission={PERMISSIONS.SUPPLIERS_DELETE}>
+                                                                        <button
+                                                                            type="button"
+                                                                            onClick={() => handleDeleteQuotation(quotation.quotation_id)}
+                                                                            className="text-sm font-medium text-red-600 hover:text-red-700"
+                                                                        >
+                                                                            Delete
+                                                                        </button>
+                                                                    </Can>
                                                                 </div>
                                                             </td>
-                                                        </tr>
-                                                    )
-                                                )}
+                                                        </CanAny>
+                                                    </tr>
+                                                ))}
                                             </tbody>
                                         </table>
                                     )}
@@ -1593,11 +1411,7 @@ const handleDeleteQuotation = async (quotationId) => {
                             <div className="mt-6 flex justify-end">
                                 <button
                                     type="button"
-                                    onClick={() =>
-                                        setSelectedSupplier(
-                                            null
-                                        )
-                                    }
+                                    onClick={() => setSelectedSupplier(null)}
                                     className="rounded-lg border px-5 py-3 text-sm font-medium hover:bg-gray-50"
                                 >
                                     Close
@@ -1608,5 +1422,13 @@ const handleDeleteQuotation = async (quotationId) => {
                 </div>
             )}
         </div>
+    );
+}
+
+export default function SupplierSourcingPage() {
+    return (
+        <PermissionGuard requiredPermission={PERMISSIONS.PROCUREMENT_VIEW}>
+            <SupplierSourcingContent />
+        </PermissionGuard>
     );
 }

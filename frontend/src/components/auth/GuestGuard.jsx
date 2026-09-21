@@ -7,20 +7,73 @@ import { getUser } from "@/services/api";
 export default function GuestGuard({ children }) {
     const router = useRouter();
     const [loading, setLoading] = useState(true);
+    const [isAuthenticated, setIsAuthenticated] = useState(false);
 
     useEffect(() => {
+        let isMounted = true;
+
         async function check() {
             try {
-                await getUser();
-                router.replace("/dashboard");
-            } catch {
-                setLoading(false);
+                // First check if we have a token
+                const token = localStorage.getItem("token") || localStorage.getItem("access_token");
+                
+                // If no token, user is definitely not authenticated
+                if (!token) {
+                    if (isMounted) {
+                        setLoading(false);
+                        setIsAuthenticated(false);
+                    }
+                    return;
+                }
+
+                // Try to get user with the token
+                try {
+                    const response = await getUser();
+                    
+                    // If getUser succeeds, user is authenticated
+                    if (isMounted) {
+                        setIsAuthenticated(true);
+                        // Add a small delay before redirect to prevent flash
+                        setTimeout(() => {
+                            router.replace("/dashboard");
+                        }, 300);
+                    }
+                } catch (error) {
+                    // getUser failed - token is invalid or expired
+                    console.log("Auth check failed:", error);
+                    
+                    // Clear invalid tokens
+                    localStorage.removeItem("token");
+                    localStorage.removeItem("access_token");
+                    localStorage.removeItem("user");
+                    localStorage.removeItem("permissions");
+                    
+                    if (isMounted) {
+                        setLoading(false);
+                        setIsAuthenticated(false);
+                    }
+                }
+            } catch (error) {
+                console.error("Auth check error:", error);
+                if (isMounted) {
+                    setLoading(false);
+                    setIsAuthenticated(false);
+                }
             }
         }
 
-        check();
+        // Add a small delay before checking to ensure state is stable
+        const initialDelay = setTimeout(() => {
+            check();
+        }, 300);
+
+        return () => {
+            isMounted = false;
+            clearTimeout(initialDelay);
+        };
     }, [router]);
 
+    // Show loading state while checking
     if (loading) {
         return (
             <div className="relative flex min-h-screen w-full items-center justify-center overflow-hidden bg-slate-50/80 font-sans antialiased">

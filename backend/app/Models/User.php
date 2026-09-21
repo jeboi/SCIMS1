@@ -17,7 +17,7 @@ class User extends Authenticatable
         'password',
         'first_name',
         'last_name',
-        'role',
+        'role_id',      // Changed from 'role' to 'role_id'
         'status',
         'avatar_url',
         'preferences',
@@ -137,11 +137,71 @@ class User extends Authenticatable
     }
 
     /**
- * Get user activities
- */
-public function activities()
-{
-    // Define the relationship to the Activity model
-    return $this->hasMany(Activity::class, 'user_id');
-}
+     * Get user activities
+     */
+    public function activities()
+    {
+        return $this->hasMany(Activity::class, 'user_id');
+    }
+
+    /**
+     * Get the role that the user belongs to.
+     */
+    public function role()
+    {
+        return $this->belongsTo(Role::class, 'role_id');
+    }
+
+        /**
+     * Check if the user has the given permission.
+     * Administrators (role_id = 1 or role name = 'Administrator') always pass.
+     */
+    public function hasPermission(string $permissionName): bool
+    {
+        // Admin shortcut — role_id 1 is Administrator in your seed
+        if ((int) $this->role_id === 1) {
+            return true;
+        }
+
+        $role = $this->relationLoaded('role')
+            ? $this->role
+            : $this->role()->first();
+
+        if (!$role) {
+            return false;
+        }
+
+        if ($role->name === 'Administrator') {
+            return true;
+        }
+
+        // Role::getPermissionsAttribute() returns a plain array of permission strings
+        return in_array($permissionName, $role->permissions, true);
+    }
+
+    /**
+     * Check for any of the given permissions.
+     */
+    public function hasAnyPermission(array $permissionNames): bool
+    {
+        foreach ($permissionNames as $name) {
+            if ($this->hasPermission($name)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * Check for all of the given permissions.
+     */
+    public function hasAllPermissions(array $permissionNames): bool
+    {
+        foreach ($permissionNames as $name) {
+            if (!$this->hasPermission($name)) {
+                return false;
+            }
+        }
+        return true;
+    }
 }

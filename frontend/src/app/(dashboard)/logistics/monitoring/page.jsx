@@ -1,5 +1,7 @@
 "use client";
 
+import { PermissionGuard } from "@/components/auth/PermissionGuard";
+import { PERMISSIONS } from "@/utils/permissions";
 import { useEffect, useState } from "react";
 import axiosInstance from "@/lib/axios";
 import { toast } from "react-hot-toast";
@@ -17,7 +19,7 @@ import {
     LineChart, Line
 } from "recharts";
 
-export default function LogisticsMonitoringPage() {
+function LogisticsMonitoringContent() {
     const [deliveries, setDeliveries] = useState([]);
     const [receivingRecords, setReceivingRecords] = useState([]);
     const [loading, setLoading] = useState(true);
@@ -354,5 +356,13 @@ export default function LogisticsMonitoringPage() {
                 )}
             </div>
         </div>
+    );
+}
+
+export default function Page() {
+    return (
+        <PermissionGuard requiredPermission={PERMISSIONS.LOGISTICS_VIEW}>
+            <LogisticsMonitoringContent />
+        </PermissionGuard>
     );
 }

@@ -10,13 +10,15 @@ import {
     TrendingUp, TrendingDown, Minus, BarChart3,
     Truck, Calendar, FileText, Download, Printer
 } from "lucide-react";
+import { PermissionGuard } from "@/components/auth/PermissionGuard";
+import { PERMISSIONS } from "@/utils/permissions";
 
 import {
     BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
     LineChart, Line, PieChart, Pie, Cell
 } from "recharts";
 
-export default function SupplierPerformancePage() {
+function SupplierPerformanceContent() {
     const [suppliers, setSuppliers] = useState([]);
     const [purchaseOrders, setPurchaseOrders] = useState([]);
     const [deliveries, setDeliveries] = useState([]);
@@ -523,5 +525,13 @@ export default function SupplierPerformancePage() {
                 </div>
             )}
         </div>
+    );
+}
+
+export default function SupplierPerformancePage() {
+    return (
+        <PermissionGuard requiredPermission={PERMISSIONS.SUPPLIERS_VIEW}>
+            <SupplierPerformanceContent />
+        </PermissionGuard>
     );
 }

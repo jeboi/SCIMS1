@@ -1,11 +1,78 @@
 "use client";
 
 import Link from "next/link";
+import { usePermission } from "@/hooks/usePermission";
+import { useAuth } from "@/context/AuthContext";
 import sidebarMenu from "./sidebar.config";
 import SidebarItem from "./SidebarItem";
 import SidebarGroup from "./SidebarGroup";
 
 export default function Sidebar({ open = true, setOpen }) {
+    const { user } = useAuth();
+    const { hasPermission } = usePermission();
+
+    // Check if a menu item should be visible based on permissions
+    const canSeeMenuItem = (item) => {
+        // If no user, hide everything
+        if (!user) return false;
+        
+        // If item has no requiredPermission, show it to everyone (but only if logged in)
+        if (!item.requiredPermission) return true;
+        
+        // Check if user has the required permission
+        return hasPermission(item.requiredPermission);
+    };
+
+    // Filter sidebar menu items based on permissions
+    const filteredMenu = sidebarMenu
+        .map((section) => {
+            // Filter items in this section
+            const filteredItems = section.items
+                .map((item) => {
+                    // If item has children, filter the children
+                    if (Array.isArray(item.children) && item.children.length > 0) {
+                        const visibleChildren = item.children.filter(child => 
+                            canSeeMenuItem(child)
+                        );
+                        
+                        // If no visible children, return null (will be filtered out)
+                        if (visibleChildren.length === 0) {
+                            return null;
+                        }
+                        
+                        // Return item with only visible children
+                        return {
+                            ...item,
+                            children: visibleChildren
+                        };
+                    }
+                    
+                    // For regular items, check if visible
+                    if (canSeeMenuItem(item)) {
+                        return item;
+                    }
+                    
+                    return null;
+                })
+                .filter(Boolean); // Remove null items
+
+            // If no items in this section, filter out the section
+            if (filteredItems.length === 0) {
+                return null;
+            }
+
+            return {
+                ...section,
+                items: filteredItems
+            };
+        })
+        .filter(Boolean); // Remove null sections
+
+    // If no menu items after filtering, show empty state or return null
+    if (filteredMenu.length === 0) {
+        return null;
+    }
+
     return (
         <aside
             className={`
@@ -74,7 +141,7 @@ export default function Sidebar({ open = true, setOpen }) {
             {/* Navigation Container */}
             <nav className="min-h-0 flex-1 overflow-y-auto px-3.5 py-4 [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
                 <div className="flex flex-col gap-4">
-                    {sidebarMenu.map((section, sectionIndex) => {
+                    {filteredMenu.map((section, sectionIndex) => {
                         if (!Array.isArray(section.items)) return null;
 
                         return (

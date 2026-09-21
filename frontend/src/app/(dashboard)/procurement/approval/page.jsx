@@ -9,8 +9,11 @@ import {
     User, Calendar, Package, ShoppingCart,
     AlertTriangle, Check, X, ArrowRight
 } from "lucide-react";
+import { PermissionGuard } from "@/components/auth/PermissionGuard";
+import { Can } from "@/components/auth/Can";                     // ← ADDED
+import { PERMISSIONS } from "@/utils/permissions";
 
-export default function ProcurementApprovalPage() {
+function ProcurementApprovalContent() {
     const [requests, setRequests] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState("");
@@ -120,12 +123,10 @@ export default function ProcurementApprovalPage() {
 
     const filteredRequests = requests
         .filter(r => {
-            // Status filter
             if (filterStatus === "all") return true;
             return r.status === filterStatus;
         })
         .filter(r => {
-            // Search filter
             if (!searchTerm) return true;
             const search = searchTerm.toLowerCase();
             return (
@@ -136,7 +137,6 @@ export default function ProcurementApprovalPage() {
         })
         .sort((a, b) => new Date(b.request_date) - new Date(a.request_date));
 
-    // Stats
     const totalRequests = requests.length;
     const pendingRequests = requests.filter(r => r.status === "pending").length;
     const approvedRequests = requests.filter(r => r.status === "approved").length;
@@ -282,6 +282,7 @@ export default function ProcurementApprovalPage() {
                                     </td>
                                     <td className="px-4 py-3 text-center">
                                         <div className="flex items-center justify-center gap-2">
+                                            {/* View Details — read-only */}
                                             <button
                                                 onClick={() => handleViewRequest(request)}
                                                 className="text-blue-600 hover:text-blue-800"
@@ -289,8 +290,10 @@ export default function ProcurementApprovalPage() {
                                             >
                                                 <Eye className="h-4 w-4" />
                                             </button>
+
+                                            {/* RBAC: Approve / Reject require procurement.approve */}
                                             {request.status === "pending" && (
-                                                <>
+                                                <Can permission={PERMISSIONS.PROCUREMENT_APPROVE}>
                                                     <button
                                                         onClick={() => handleApprove(request.request_id)}
                                                         disabled={actionLoading}
@@ -307,7 +310,7 @@ export default function ProcurementApprovalPage() {
                                                     >
                                                         <XCircle className="h-4 w-4" />
                                                     </button>
-                                                </>
+                                                </Can>
                                             )}
                                         </div>
                                     </td>
@@ -345,7 +348,6 @@ export default function ProcurementApprovalPage() {
                         </div>
 
                         <div className="p-6 space-y-4">
-                            {/* Request Info */}
                             <div className="grid grid-cols-2 gap-4">
                                 <div>
                                     <p className="text-xs font-medium uppercase text-gray-500">Requested By</p>
@@ -367,7 +369,6 @@ export default function ProcurementApprovalPage() {
                                 </div>
                             </div>
 
-                            {/* Items */}
                             <div>
                                 <h3 className="text-sm font-semibold mb-2">Requested Items</h3>
                                 <div className="overflow-hidden rounded-lg border">
@@ -400,7 +401,6 @@ export default function ProcurementApprovalPage() {
                                 </div>
                             </div>
 
-                            {/* Actions */}
                             <div className="flex justify-end gap-3 border-t pt-4">
                                 <button
                                     onClick={() => setShowModal(false)}
@@ -409,7 +409,7 @@ export default function ProcurementApprovalPage() {
                                     Close
                                 </button>
                                 {selectedRequest.status === "pending" && (
-                                    <>
+                                    <Can permission={PERMISSIONS.PROCUREMENT_APPROVE}>
                                         <button
                                             onClick={() => {
                                                 setShowModal(false);
@@ -428,7 +428,7 @@ export default function ProcurementApprovalPage() {
                                             <CheckCircle className="h-4 w-4" />
                                             Approve
                                         </button>
-                                    </>
+                                    </Can>
                                 )}
                             </div>
                         </div>
@@ -503,5 +503,13 @@ export default function ProcurementApprovalPage() {
                 </div>
             )}
         </div>
+    );
+}
+
+export default function ProcurementApprovalPage() {
+    return (
+        <PermissionGuard requiredPermission={PERMISSIONS.PROCUREMENT_APPROVE}>
+            <ProcurementApprovalContent />
+        </PermissionGuard>
     );
 }

@@ -10,13 +10,16 @@ import {
     Award, AlertTriangle, Package, ShoppingCart,
     FileText, BarChart3, PieChart as PieChartIcon
 } from "lucide-react";
+import { PermissionGuard } from "@/components/auth/PermissionGuard";
+import { Can } from "@/components/auth/Can";                     // ← ADDED
+import { PERMISSIONS } from "@/utils/permissions";
 
 import {
     BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
     PieChart, Pie, Cell
 } from "recharts";
 
-export default function SupplierEvaluationPage() {
+function SupplierEvaluationContent() {
     const [suppliers, setSuppliers] = useState([]);
     const [purchaseOrders, setPurchaseOrders] = useState([]);
     const [loading, setLoading] = useState(true);
@@ -38,18 +41,18 @@ export default function SupplierEvaluationPage() {
         try {
             setLoading(true);
             setError("");
-            
+
             const [suppliersRes, posRes] = await Promise.all([
                 axiosInstance.get("/suppliers"),
                 axiosInstance.get("/purchase-orders"),
             ]);
-            
+
             const suppliersData = suppliersRes.data?.data || [];
             const posData = posRes.data?.data || [];
-            
+
             setSuppliers(suppliersData);
             setPurchaseOrders(posData);
-            
+
         } catch (err) {
             console.error(err);
             setError("Failed to load supplier data.");
@@ -76,7 +79,7 @@ export default function SupplierEvaluationPage() {
 
     const handleSubmitRating = async (e) => {
         e.preventDefault();
-        
+
         if (ratingForm.rating < 1 || ratingForm.rating > 5) {
             toast.error("Please select a rating between 1 and 5.");
             return;
@@ -88,7 +91,7 @@ export default function SupplierEvaluationPage() {
                 ...selectedSupplier,
                 rating: ratingForm.rating,
             });
-            
+
             toast.success(`Supplier rating updated to ${ratingForm.rating} ★`);
             setShowRatingModal(false);
             setSelectedSupplier(null);
@@ -108,7 +111,7 @@ export default function SupplierEvaluationPage() {
         const pending = pos.filter(po => po.status === "pending").length;
         const approved = pos.filter(po => po.status === "approved").length;
         const rejected = pos.filter(po => po.status === "rejected").length;
-        
+
         return {
             total,
             completed,
@@ -120,25 +123,24 @@ export default function SupplierEvaluationPage() {
     };
 
     const getRatingStars = (rating) => {
-    // Convert rating to number if it's a string
-    const numericRating = typeof rating === 'string' ? parseFloat(rating) : (rating || 0);
-    const fullStars = Math.floor(numericRating);
-    const halfStar = numericRating % 1 >= 0.5;
-    const emptyStars = 5 - fullStars - (halfStar ? 1 : 0);
-    
-    return (
-        <span className="flex items-center gap-0.5">
-            {[...Array(fullStars)].map((_, i) => (
-                <Star key={`full-${i}`} className="h-4 w-4 fill-yellow-400 text-yellow-400" />
-            ))}
-            {halfStar && <Star className="h-4 w-4 fill-yellow-400 text-yellow-400" />}
-            {[...Array(emptyStars)].map((_, i) => (
-                <Star key={`empty-${i}`} className="h-4 w-4 text-gray-300" />
-            ))}
-            <span className="ml-1 text-xs text-gray-500">({numericRating.toFixed(1)})</span>
-        </span>
-    );
-};
+        const numericRating = typeof rating === 'string' ? parseFloat(rating) : (rating || 0);
+        const fullStars = Math.floor(numericRating);
+        const halfStar = numericRating % 1 >= 0.5;
+        const emptyStars = 5 - fullStars - (halfStar ? 1 : 0);
+
+        return (
+            <span className="flex items-center gap-0.5">
+                {[...Array(fullStars)].map((_, i) => (
+                    <Star key={`full-${i}`} className="h-4 w-4 fill-yellow-400 text-yellow-400" />
+                ))}
+                {halfStar && <Star className="h-4 w-4 fill-yellow-400 text-yellow-400" />}
+                {[...Array(emptyStars)].map((_, i) => (
+                    <Star key={`empty-${i}`} className="h-4 w-4 text-gray-300" />
+                ))}
+                <span className="ml-1 text-xs text-gray-500">({numericRating.toFixed(1)})</span>
+            </span>
+        );
+    };
 
     const getStatusBadge = (status) => {
         const colors = {
@@ -154,7 +156,7 @@ export default function SupplierEvaluationPage() {
                 s.contact_person?.toLowerCase().includes(searchTerm.toLowerCase()) ||
                 s.email?.toLowerCase().includes(searchTerm.toLowerCase());
             const matchesStatus = filterStatus === "all" || s.status === filterStatus;
-            const matchesRating = filterRating === "all" || 
+            const matchesRating = filterRating === "all" ||
                 (filterRating === "high" && s.rating >= 4) ||
                 (filterRating === "medium" && s.rating >= 2.5 && s.rating < 4) ||
                 (filterRating === "low" && s.rating < 2.5 && s.rating > 0) ||
@@ -163,23 +165,22 @@ export default function SupplierEvaluationPage() {
         })
         .sort((a, b) => (b.rating || 0) - (a.rating || 0));
 
-    // Stats
     const totalSuppliers = suppliers.length;
     const activeSuppliers = suppliers.filter(s => s.status === "active").length;
     const inactiveSuppliers = suppliers.filter(s => s.status === "inactive").length;
     const ratedSuppliers = suppliers.filter(s => s.rating > 0).length;
-const avgRating = suppliers
-    .filter(s => s.rating > 0)
-    .reduce((sum, s) => sum + parseFloat(s.rating || 0), 0) / (ratedSuppliers || 1);
-    // Rating Distribution
+    const avgRating = suppliers
+        .filter(s => s.rating > 0)
+        .reduce((sum, s) => sum + parseFloat(s.rating || 0), 0) / (ratedSuppliers || 1);
+
     const ratingDistribution = [
-    { range: "5 ★", count: suppliers.filter(s => parseFloat(s.rating) >= 4.5).length, color: "#22c55e" },
-    { range: "4 ★", count: suppliers.filter(s => parseFloat(s.rating) >= 3.5 && parseFloat(s.rating) < 4.5).length, color: "#3b82f6" },
-    { range: "3 ★", count: suppliers.filter(s => parseFloat(s.rating) >= 2.5 && parseFloat(s.rating) < 3.5).length, color: "#f59e0b" },
-    { range: "2 ★", count: suppliers.filter(s => parseFloat(s.rating) >= 1.5 && parseFloat(s.rating) < 2.5).length, color: "#f97316" },
-    { range: "1 ★", count: suppliers.filter(s => parseFloat(s.rating) > 0 && parseFloat(s.rating) < 1.5).length, color: "#ef4444" },
-    { range: "Unrated", count: suppliers.filter(s => !s.rating || parseFloat(s.rating) === 0).length, color: "#9ca3af" },
-].filter(d => d.count > 0);
+        { range: "5 ★", count: suppliers.filter(s => parseFloat(s.rating) >= 4.5).length, color: "#22c55e" },
+        { range: "4 ★", count: suppliers.filter(s => parseFloat(s.rating) >= 3.5 && parseFloat(s.rating) < 4.5).length, color: "#3b82f6" },
+        { range: "3 ★", count: suppliers.filter(s => parseFloat(s.rating) >= 2.5 && parseFloat(s.rating) < 3.5).length, color: "#f59e0b" },
+        { range: "2 ★", count: suppliers.filter(s => parseFloat(s.rating) >= 1.5 && parseFloat(s.rating) < 2.5).length, color: "#f97316" },
+        { range: "1 ★", count: suppliers.filter(s => parseFloat(s.rating) > 0 && parseFloat(s.rating) < 1.5).length, color: "#ef4444" },
+        { range: "Unrated", count: suppliers.filter(s => !s.rating || parseFloat(s.rating) === 0).length, color: "#9ca3af" },
+    ].filter(d => d.count > 0);
 
     if (loading) {
         return (
@@ -364,6 +365,7 @@ const avgRating = suppliers
                                         </td>
                                         <td className="px-4 py-3 text-center">
                                             <div className="flex items-center justify-center gap-2">
+                                                {/* View is read-only */}
                                                 <button
                                                     onClick={() => handleViewSupplier(supplier)}
                                                     className="text-blue-600 hover:text-blue-800"
@@ -371,13 +373,17 @@ const avgRating = suppliers
                                                 >
                                                     <Eye className="h-4 w-4" />
                                                 </button>
-                                                <button
-                                                    onClick={() => handleOpenRatingModal(supplier)}
-                                                    className="text-yellow-600 hover:text-yellow-800"
-                                                    title="Rate Supplier"
-                                                >
-                                                    <Star className="h-4 w-4" />
-                                                </button>
+
+                                                {/* RBAC: rating requires suppliers.evaluate */}
+                                                <Can permission={PERMISSIONS.SUPPLIERS_EVALUATE}>
+                                                    <button
+                                                        onClick={() => handleOpenRatingModal(supplier)}
+                                                        className="text-yellow-600 hover:text-yellow-800"
+                                                        title="Rate Supplier"
+                                                    >
+                                                        <Star className="h-4 w-4" />
+                                                    </button>
+                                                </Can>
                                             </div>
                                         </td>
                                     </tr>
@@ -415,7 +421,6 @@ const avgRating = suppliers
                         </div>
 
                         <div className="p-6 space-y-4">
-                            {/* Supplier Info */}
                             <div className="grid grid-cols-2 gap-4">
                                 <div>
                                     <p className="text-xs font-medium uppercase text-gray-500">Contact Person</p>
@@ -445,7 +450,6 @@ const avgRating = suppliers
                                 </div>
                             </div>
 
-                            {/* Performance Stats */}
                             <div className="border-t pt-4">
                                 <h3 className="text-sm font-semibold mb-2">Performance Summary</h3>
                                 <div className="grid grid-cols-4 gap-4">
@@ -477,16 +481,19 @@ const avgRating = suppliers
                             </div>
 
                             <div className="flex justify-end border-t pt-4">
-                                <button
-                                    onClick={() => {
-                                        setShowModal(false);
-                                        handleOpenRatingModal(selectedSupplier);
-                                    }}
-                                    className="rounded-lg bg-yellow-600 px-5 py-2.5 text-sm font-medium text-white hover:bg-yellow-700 flex items-center gap-2"
-                                >
-                                    <Star className="h-4 w-4" />
-                                    Rate Supplier
-                                </button>
+                                {/* RBAC: rate action requires suppliers.evaluate */}
+                                <Can permission={PERMISSIONS.SUPPLIERS_EVALUATE}>
+                                    <button
+                                        onClick={() => {
+                                            setShowModal(false);
+                                            handleOpenRatingModal(selectedSupplier);
+                                        }}
+                                        className="rounded-lg bg-yellow-600 px-5 py-2.5 text-sm font-medium text-white hover:bg-yellow-700 flex items-center gap-2"
+                                    >
+                                        <Star className="h-4 w-4" />
+                                        Rate Supplier
+                                    </button>
+                                </Can>
                                 <button
                                     onClick={() => setShowModal(false)}
                                     className="rounded-lg border px-5 py-2.5 text-sm font-medium hover:bg-gray-50 ml-3"
@@ -523,7 +530,6 @@ const avgRating = suppliers
                         </div>
 
                         <form onSubmit={handleSubmitRating} className="p-6 space-y-4">
-                            {/* Rating Stars */}
                             <div>
                                 <label className="mb-2 block text-sm font-medium text-gray-700">
                                     Rating (1-5)
@@ -551,7 +557,6 @@ const avgRating = suppliers
                                 </div>
                             </div>
 
-                            {/* Notes */}
                             <div>
                                 <label className="mb-1 block text-sm font-medium text-gray-700">
                                     Notes (optional)
@@ -591,5 +596,13 @@ const avgRating = suppliers
                 </div>
             )}
         </div>
+    );
+}
+
+export default function SupplierEvaluationPage() {
+    return (
+        <PermissionGuard requiredPermission={PERMISSIONS.SUPPLIERS_VIEW}>
+            <SupplierEvaluationContent />
+        </PermissionGuard>
     );
 }

@@ -10,13 +10,16 @@ import {
     FileText, Download, Printer, Award,
     Package, Truck, Calendar, User, BarChart3
 } from "lucide-react";
+import { PermissionGuard } from "@/components/auth/PermissionGuard";
+import { Can } from "@/components/auth/Can";                     // ← ADDED
+import { PERMISSIONS } from "@/utils/permissions";
 
 import {
     BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
     LineChart, Line, PieChart, Pie, Cell
 } from "recharts";
 
-export default function PurchaseOrderReportsPage() {
+function PurchaseOrderReportsContent() {
     const [purchaseOrders, setPurchaseOrders] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState("");
@@ -92,7 +95,6 @@ export default function PurchaseOrderReportsPage() {
             return true;
         });
 
-    // Stats
     const totalPOs = purchaseOrders.length;
     const totalSpending = purchaseOrders.reduce((sum, po) => {
         return sum + (po.details?.reduce((s, d) => s + parseFloat(d.subtotal || 0), 0) || 0);
@@ -106,7 +108,6 @@ export default function PurchaseOrderReportsPage() {
         completed: purchaseOrders.filter(po => po.status === "completed").length,
     };
 
-    // Chart Data
     const statusChartData = [
         { name: "Pending", value: statusCounts.pending, color: "#f59e0b" },
         { name: "Approved", value: statusCounts.approved, color: "#3b82f6" },
@@ -115,7 +116,6 @@ export default function PurchaseOrderReportsPage() {
         { name: "Rejected", value: statusCounts.rejected, color: "#ef4444" },
     ].filter(d => d.value > 0);
 
-    // Monthly PO Trend
     const monthlyData = {};
     purchaseOrders.forEach(po => {
         if (po.po_date) {
@@ -133,7 +133,6 @@ export default function PurchaseOrderReportsPage() {
             return order.indexOf(a.month) - order.indexOf(b.month);
         });
 
-    // Spending by Supplier
     const supplierSpending = purchaseOrders
         .filter(po => po.supplier)
         .reduce((acc, po) => {
@@ -150,7 +149,6 @@ export default function PurchaseOrderReportsPage() {
         }))
         .sort((a, b) => b.spending - a.spending);
 
-    // Top Items Ordered
     const itemCount = {};
     purchaseOrders.forEach(po => {
         po.details?.forEach(d => {
@@ -167,7 +165,6 @@ export default function PurchaseOrderReportsPage() {
             quantity,
         }));
 
-    // Supplier Performance
     const supplierPerformance = purchaseOrders
         .filter(po => po.supplier)
         .reduce((acc, po) => {
@@ -216,6 +213,7 @@ export default function PurchaseOrderReportsPage() {
                     </p>
                 </div>
                 <div className="flex flex-wrap gap-2">
+                    {/* Refresh — read-only */}
                     <button
                         onClick={loadData}
                         className="rounded-lg border px-4 py-2.5 text-sm font-medium hover:bg-gray-50 flex items-center gap-2"
@@ -223,40 +221,46 @@ export default function PurchaseOrderReportsPage() {
                         <RefreshCw className="h-4 w-4" />
                         Refresh
                     </button>
-                    <button
-                        onClick={() => {
-                            const headers = ["PO #", "Supplier", "Date", "Status", "Items", "Total"];
-                            const rows = filteredPOs.map(po => {
-                                const total = po.details?.reduce((s, d) => s + parseFloat(d.subtotal || 0), 0) || 0;
-                                return [
-                                    `"${po.po_number || po.po_id}"`,
-                                    `"${po.supplier?.supplier_name || "—"}"`,
-                                    `"${po.po_date ? new Date(po.po_date).toLocaleDateString() : "—"}"`,
-                                    `"${getStatusLabel(po.status)}"`,
-                                    po.details?.length || 0,
-                                    total.toFixed(2),
-                                ];
-                            });
-                            let csv = headers.join(",") + "\n";
-                            rows.forEach(row => {
-                                csv += row.join(",") + "\n";
-                            });
-                            const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-                            const url = window.URL.createObjectURL(blob);
-                            const a = document.createElement('a');
-                            a.href = url;
-                            a.download = `po_report_${new Date().toISOString().slice(0,10)}.csv`;
-                            document.body.appendChild(a);
-                            a.click();
-                            document.body.removeChild(a);
-                            window.URL.revokeObjectURL(url);
-                            toast.success("CSV exported successfully!");
-                        }}
-                        className="rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-blue-700 flex items-center gap-2"
-                    >
-                        <Download className="h-4 w-4" />
-                        Export CSV
-                    </button>
+
+                    {/* RBAC: only reports.export can export */}
+                    <Can permission={PERMISSIONS.REPORTS_EXPORT}>
+                        <button
+                            onClick={() => {
+                                const headers = ["PO #", "Supplier", "Date", "Status", "Items", "Total"];
+                                const rows = filteredPOs.map(po => {
+                                    const total = po.details?.reduce((s, d) => s + parseFloat(d.subtotal || 0), 0) || 0;
+                                    return [
+                                        `"${po.po_number || po.po_id}"`,
+                                        `"${po.supplier?.supplier_name || "—"}"`,
+                                        `"${po.po_date ? new Date(po.po_date).toLocaleDateString() : "—"}"`,
+                                        `"${getStatusLabel(po.status)}"`,
+                                        po.details?.length || 0,
+                                        total.toFixed(2),
+                                    ];
+                                });
+                                let csv = headers.join(",") + "\n";
+                                rows.forEach(row => {
+                                    csv += row.join(",") + "\n";
+                                });
+                                const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+                                const url = window.URL.createObjectURL(blob);
+                                const a = document.createElement('a');
+                                a.href = url;
+                                a.download = `po_report_${new Date().toISOString().slice(0,10)}.csv`;
+                                document.body.appendChild(a);
+                                a.click();
+                                document.body.removeChild(a);
+                                window.URL.revokeObjectURL(url);
+                                toast.success("CSV exported successfully!");
+                            }}
+                            className="rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-blue-700 flex items-center gap-2"
+                        >
+                            <Download className="h-4 w-4" />
+                            Export CSV
+                        </button>
+                    </Can>
+
+                    {/* Print — read-only */}
                     <button
                         onClick={() => {
                             const printWindow = window.open('', '_blank', 'width=1200,height=800');
@@ -342,7 +346,6 @@ export default function PurchaseOrderReportsPage() {
 
             {/* Charts */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 report-print">
-                {/* PO Status Distribution */}
                 {statusChartData.length > 0 && (
                     <div className="bg-white rounded-lg border p-4">
                         <h3 className="text-sm font-semibold mb-2">PO Status Distribution</h3>
@@ -370,7 +373,6 @@ export default function PurchaseOrderReportsPage() {
                     </div>
                 )}
 
-                {/* Monthly PO Trend */}
                 {monthlyTrend.length > 0 && (
                     <div className="bg-white rounded-lg border p-4">
                         <h3 className="text-sm font-semibold mb-2">Monthly PO Trend</h3>
@@ -390,7 +392,6 @@ export default function PurchaseOrderReportsPage() {
                     </div>
                 )}
 
-                {/* Spending by Supplier */}
                 {supplierSpendingData.length > 0 && (
                     <div className="bg-white rounded-lg border p-4">
                         <h3 className="text-sm font-semibold mb-2">Spending by Supplier</h3>
@@ -408,7 +409,6 @@ export default function PurchaseOrderReportsPage() {
                     </div>
                 )}
 
-                {/* Top Items Ordered */}
                 {topItems.length > 0 && (
                     <div className="bg-white rounded-lg border p-4">
                         <h3 className="text-sm font-semibold mb-2">Top Items Ordered</h3>
@@ -450,7 +450,7 @@ export default function PurchaseOrderReportsPage() {
                                         <td className="px-4 py-2 text-center">
                                             <div className="flex items-center justify-center gap-2">
                                                 <div className="h-2 w-16 bg-gray-200 rounded-full overflow-hidden">
-                                                    <div 
+                                                    <div
                                                         className={`h-full rounded-full ${
                                                             supplier.rate > 80 ? 'bg-green-500' :
                                                             supplier.rate > 50 ? 'bg-yellow-500' :
@@ -524,5 +524,13 @@ export default function PurchaseOrderReportsPage() {
                 </div>
             </div>
         </div>
+    );
+}
+
+export default function PurchaseOrderReportsPage() {
+    return (
+        <PermissionGuard requiredPermission={PERMISSIONS.REPORTS_VIEW}>
+            <PurchaseOrderReportsContent />
+        </PermissionGuard>
     );
 }
