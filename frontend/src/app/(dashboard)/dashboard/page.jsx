@@ -9,6 +9,8 @@ import { getDashboardMetrics } from "@/services/api";
 import axiosInstance from "@/lib/axios";
 import { PermissionGuard } from "@/components/auth/PermissionGuard";
 import { PERMISSIONS } from "@/utils/permissions";
+import StatusBadge from "@/components/ui/StatusBadge";
+import KpiCard from "@/components/ui/KpiCard";
 
 import {
     ArrowUpRight,
@@ -302,6 +304,7 @@ function DashboardContent() {
                 <span>/</span>
                 <span>Overview</span>
             </div>
+
 
             {/* WELCOME BANNER */}
             <section className={styles.welcomeBanner}>
