@@ -27,6 +27,14 @@ import Link from "next/link";
  *       note="+12% vs last week"
  *       trend="up"
  *   />
+ *
+ *   // With a sparkline or any custom visual below the value:
+ *   <KpiCard
+ *       label="Total Items"
+ *       value={1234}
+ *       icon={Boxes}
+ *       sparkline={<MySparklineSVG />}
+ *   />
  */
 export default function KpiCard({
     label,
@@ -37,9 +45,13 @@ export default function KpiCard({
     icon: Icon,
     href,
     onClick,
+    sparkline,           // optional ReactNode — renders below the value
+    onMouseEnter,        // optional — for interactive cards with sparkline
+    onMouseLeave,        // optional — for interactive cards with sparkline
     className = "",
 }) {
     const isInteractive = Boolean(href || onClick);
+    const hasSparkline = Boolean(sparkline);
 
     // Tone → ring color used when hovering an interactive card
     const toneRing = {
@@ -94,6 +106,8 @@ export default function KpiCard({
     return (
         <Wrapper
             {...wrapperProps}
+            onMouseEnter={onMouseEnter}
+            onMouseLeave={onMouseLeave}
             className={`
                 group relative rounded-3xl border border-slate-200 bg-white p-5
                 shadow-[0_1px_2px_0_rgb(0_0_0_/_0.03)]
@@ -111,7 +125,6 @@ export default function KpiCard({
                 ${className}
             `}
             style={{
-                // 280ms cubic-bezier [0.32, 0.72, 0, 1] — FleetOps spec
                 transitionTimingFunction: "cubic-bezier(0.32, 0.72, 0, 1)",
             }}
         >
@@ -140,6 +153,13 @@ export default function KpiCard({
                     </div>
                 )}
             </div>
+
+            {/* Sparkline / custom visual slot */}
+            {hasSparkline && (
+                <div className="mt-3">
+                    {sparkline}
+                </div>
+            )}
 
             {trend && (
                 <p className={`mt-2 text-[11px] font-medium ${trendColor}`}>
